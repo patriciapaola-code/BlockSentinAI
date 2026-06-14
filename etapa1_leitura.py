@@ -1,10 +1,11 @@
 import sys
 
-print(sys.executable)
+def leitura():
+    print(sys.executable)
 
-import pandas as pd
+    import pandas as pd
 
-df = pd.read_csv("transacoesbtcsimples.csv")
+    df = pd.read_csv("transacoesbtcsimples.csv")
 
-print("Dados carregados:")
-print(df)
+    print("Dados carregados:")
+    print(df)
