@@ -6,7 +6,8 @@ import time
 
 BASE_URL = "https://blockstream.info/api"
 
-def obterNeighbors(address, limite_transacoes=5):
+## API para pegar da rede bitcoin
+def obterNeighbors(address, limite_transacoes):
 
     try:
         url = f"{BASE_URL}/address/{address}/txs"
@@ -55,7 +56,7 @@ def obterNeighbors(address, limite_transacoes=5):
 
         return []
 
-def expandirGrafo(address, profundidade=2, max_vizinhos=10, max_nos=500):
+def expandirGrafo(address, profundidade, max_vizinhos, max_nos):
 
     G = nx.DiGraph()
 
@@ -76,7 +77,7 @@ def expandirGrafo(address, profundidade=2, max_vizinhos=10, max_nos=500):
 
             visitados.add(atual)
 
-            vizinhos = obterNeighbors(atual)
+            vizinhos = obterNeighbors(atual, 10)
 
             for vizinho in vizinhos[:max_vizinhos]:
 
@@ -103,21 +104,27 @@ def expandirGrafo(address, profundidade=2, max_vizinhos=10, max_nos=500):
 
     return G
 
-def resumirGrafo(G):
+def construirGrafoFiltrado(G, uf):
 
-    print()
+    G_filtrado = nx.DiGraph()
 
-    print("===== RESUMO =====")
+    for origem, destino, dados in G.edges(data=True):
 
-    print("Nós:", G.number_of_nodes())
+        entidade_origem = uf[origem]
 
-    print("Arestas:", G.number_of_edges())
+        entidade_destino = uf[destino]
 
-    print()
+        if entidade_origem != entidade_destino:
 
-    print("Top 10 por grau:")
+            valor = dados.get(
+                "valor",
+                0
+            )
 
-    graus = sorted(G.degree, key=lambda x: x[1], reverse=True)
+            G_filtrado.add_edge(
+                entidade_origem,
+                entidade_destino,
+                valor=valor
+            )
 
-    for carteira, grau in graus[:10]:
-        print(carteira, "->", grau)
+    return G_filtrado
