@@ -1,5 +1,7 @@
+import requests 
+import networkx as nx 
+import json
 import requests
-import networkx as nx
 import time
 
 BASE_URL = "https://blockstream.info/api"
@@ -90,7 +92,7 @@ def expandirGrafo(address, profundidade, max_vizinhos, max_nos):
                 continue
 
             visitados.add(atual)
-            vizinhos = obterNeighbors(atual, max_vizinhos)
+            vizinhos = obterNeighbors(atual, 10)
 
             for vizinho in vizinhos[:max_vizinhos]:
                 destino = vizinho["address"]
@@ -127,19 +129,26 @@ def expandirGrafo(address, profundidade, max_vizinhos, max_nos):
     return G
 
 def construirGrafoFiltrado(G, uf):
+
     G_filtrado = nx.MultiDiGraph()
 
     for origem, destino, dados in G.edges(data=True):
-        # CORREÇÃO: Se o nó não está no UnionFind, ele representa ele mesmo
-        entidade_origem = uf[origem] if origem in uf else origem
-        entidade_destino = uf[destino] if destino in uf else destino
+
+        entidade_origem = uf[origem]
+        
+        entidade_destino = uf[destino]
 
         if entidade_origem != entidade_destino:
+
+            valor = dados.get(
+                "valor",
+                0
+            )
+
             G_filtrado.add_edge(
                 entidade_origem,
                 entidade_destino,
                 **dados
             )
-            
-    # Garante que nós isolados que perderam arestas não quebrem o desenho
+
     return G_filtrado

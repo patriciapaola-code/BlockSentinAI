@@ -5,35 +5,25 @@ from matplotlib.patches import Patch
 
 
 def filtrarNome(G):
-    labels = {}
-
-    for i, no in enumerate(G.nodes()):
-        labels[no] = f"wallet_{i}"
-
-    return labels
+    return {no: f"wallet_{i}" for i, no in enumerate(G.nodes())}
 
 
 def filtrarNomeComScore(G, scores):
     labels = {}
-
     for i, no in enumerate(G.nodes()):
-        score = scores.get(no, {}).get("score", 0)
-        labels[no] = f"wallet_{i}\n{score}"
-
+        score = scores.get(no, {}).get("score", 0) if scores else 0
+        labels[no] = f"wallet_{i}\n{round(score, 2)}"
     return labels
 
 
 def adicionarLegenda(itens):
-    plt.legend(
-        handles=itens,
-        loc="upper right",
-        frameon=True,
-        title="Legenda"
-    )
+    plt.legend(handles=itens, loc="upper right", frameon=True, title="Legenda")
 
 
 def corPorRisco(score):
-    if score >= 70:
+    if score >= 80:
+        return "darkred"
+    if score >= 60:
         return "red"
     if score >= 40:
         return "orange"
@@ -46,89 +36,45 @@ def gerarGrafoFiltrado(
     G_filtrado,
     heuristica_nome,
     scores=None,
-    carteira_principal=None,
     caminho_destacado=None
 ):
     plt.figure(figsize=(14, 10))
 
-    pos = nx.spring_layout(
-        G_filtrado,
-        k=2,
-        seed=42
-    )
+    pos = nx.spring_layout(G_filtrado, k=1.5, seed=42)
 
     cores = []
     tamanhos = []
 
     for no in G_filtrado.nodes():
-        if scores:
-            score = scores.get(no, {}).get("score", 0)
-            cores.append(corPorRisco(score))
-            tamanhos.append(500 + score * 12)
-            continue
+        score = scores.get(no, {}).get("score", 0) if scores else 0
 
-        vizinhos = set(G_filtrado.predecessors(no))
-        vizinhos.update(G_filtrado.successors(no))
-        grau_real = len(vizinhos)
+        cores.append(corPorRisco(score))
+        tamanhos.append(300 + score * 10)
 
-        if grau_real >= 8:
-            cores.append("red")
-        elif grau_real >= 4:
-            cores.append("orange")
-        else:
-            cores.append("lightgreen")
-
-        tamanhos.append(500 + grau_real * 150)
-
-    nx.draw_networkx_nodes(
-        G_filtrado,
-        pos,
-        node_color=cores,
-        node_size=tamanhos
-    )
+    nx.draw_networkx_nodes(G_filtrado, pos, node_color=cores, node_size=tamanhos)
 
     nx.draw_networkx_edges(
         G_filtrado,
         pos,
         arrows=True,
-        arrowsize=15
+        arrowsize=15,
+        alpha=0.6
     )
 
-    for no in G_filtrado.nodes():
-        vizinhos = set(G_filtrado.predecessors(no))
-        vizinhos.update(G_filtrado.successors(no))
-        grau_real = len(vizinhos)
-        risco_alto = scores and scores.get(no, {}).get("score", 0) >= 70
+    if scores:
+        for no in G_filtrado.nodes():
+            score = scores.get(no, {}).get("score", 0)
 
-        if risco_alto or (not scores and grau_real >= 8):
-            vizinhos = list(vizinhos)[:8]
-
-            nx.draw_networkx_nodes(
-                G_filtrado,
-                pos,
-                nodelist=vizinhos,
-                node_color="yellow",
-                node_size=1200
-            )
-
-            arestas = []
-
-            for v in vizinhos:
-                if G_filtrado.has_edge(no, v):
-                    arestas.append((no, v))
-
-                if G_filtrado.has_edge(v, no):
-                    arestas.append((v, no))
-
-            nx.draw_networkx_edges(
-                G_filtrado,
-                pos,
-                edgelist=arestas,
-                edge_color="red",
-                width=4,
-                arrows=True,
-                arrowsize=20
-            )
+            if score >= 70:
+                nx.draw_networkx_nodes(
+                    G_filtrado,
+                    pos,
+                    nodelist=[no],
+                    node_color="yellow",
+                    node_size=1200,
+                    edgecolors="black",
+                    linewidths=1.5
+                )
 
     if caminho_destacado and len(caminho_destacado) >= 2:
         arestas_caminho = list(zip(caminho_destacado, caminho_destacado[1:]))
@@ -138,21 +84,25 @@ def gerarGrafoFiltrado(
             pos,
             edgelist=arestas_caminho,
             edge_color="blue",
-            width=5,
+            width=3,
             arrows=True,
-            arrowsize=24
+            arrowsize=20
         )
-
+        
         nx.draw_networkx_nodes(
             G_filtrado,
             pos,
             nodelist=caminho_destacado,
-            node_color="deepskyblue",
-            node_size=1500,
-            edgecolors="black",
-            linewidths=1.5
+            node_color=[
+                corPorRisco(scores.get(no, {}).get("score", 0)) if scores else "lightblue"
+                for no in caminho_destacado
+            ],
+            node_size=1400,
+            edgecolors="blue",
+            linewidths=2.5
         )
 
+    # 🔥 LABELS
     nx.draw_networkx_labels(
         G_filtrado,
         pos,
@@ -162,24 +112,22 @@ def gerarGrafoFiltrado(
 
     if scores:
         adicionarLegenda([
-            Patch(facecolor="red", label="Risco alto (score >= 70)"),
-            Patch(facecolor="orange", label="Risco medio (40 a 69)"),
-            Patch(facecolor="lightgreen", label="Risco baixo (1 a 39)"),
-            Patch(facecolor="lightgray", label="Sem evidencia"),
-            Patch(facecolor="yellow", label="Vizinho de carteira de alto risco"),
-            Line2D([0], [0], color="red", lw=4, label="Ligacao envolvendo carteira de alto risco"),
-            Line2D([0], [0], color="blue", lw=5, label="Trajetoria provavel")
+            Patch(facecolor="darkred", label="Risco crítico (>= 80)"),
+            Patch(facecolor="red", label="Risco alto (60-79)"),
+            Patch(facecolor="orange", label="Risco médio (40-59)"),
+            Patch(facecolor="lightgreen", label="Risco baixo (1-39)"),
+            Patch(facecolor="lightgray", label="Sem evidência"),
+            Line2D([0], [0], color="blue", lw=3, label="Trajetória provável")
         ])
     else:
         adicionarLegenda([
-            Patch(facecolor="red", label="No com 8 ou mais conexoes"),
-            Patch(facecolor="orange", label="No com 4 a 7 conexoes"),
-            Patch(facecolor="lightgreen", label="No com ate 3 conexoes"),
-            Patch(facecolor="yellow", label="Vizinho destacado de no critico"),
-            Line2D([0], [0], color="red", lw=4, label="Aresta destacada")
+            Patch(facecolor="red", label="Carteira principal"),
+            Patch(facecolor="orange", label="Nó relevante estrutural"),
+            Patch(facecolor="lightblue", label="Demais carteiras"),
+            Line2D([0], [0], color="black", lw=1, label="Transação")
         ])
 
-    plt.title(f"Grafo Filtrado por Heuristica de {heuristica_nome}")
+    plt.title(f"Grafo Filtrado por Heurística: {heuristica_nome}")
     plt.axis("off")
     plt.tight_layout()
     plt.show()
@@ -188,43 +136,33 @@ def gerarGrafoFiltrado(
 def gerarGrafo(G, carteira_principal, scores=None):
     plt.figure(figsize=(12, 8))
 
-    pos = nx.spring_layout(
-        G,
-        k=1.5,
-        seed=42
-    )
+    pos = nx.spring_layout(G, k=1.2, seed=42)
 
     cores = []
     tamanhos = []
 
     for no in G.nodes():
+        score = scores.get(no, {}).get("score", 0) if scores else 0
+
         if scores:
-            score = scores.get(no, {}).get("score", 0)
             cores.append(corPorRisco(score))
-            tamanhos.append(600 + score * 10)
+            tamanhos.append(400 + score * 10)
+
         elif no == carteira_principal:
             cores.append("red")
             tamanhos.append(1000)
+
         elif G.in_degree(no) >= 3:
             cores.append("orange")
-            tamanhos.append(1000)
+            tamanhos.append(800)
+
         else:
             cores.append("lightblue")
-            tamanhos.append(1000)
+            tamanhos.append(500)
 
-    nx.draw_networkx_nodes(
-        G,
-        pos,
-        node_color=cores,
-        node_size=tamanhos
-    )
+    nx.draw_networkx_nodes(G, pos, node_color=cores, node_size=tamanhos)
 
-    nx.draw_networkx_edges(
-        G,
-        pos,
-        arrows=True,
-        arrowsize=15
-    )
+    nx.draw_networkx_edges(G, pos, arrows=True, arrowsize=12, alpha=0.6)
 
     nx.draw_networkx_labels(
         G,
@@ -233,35 +171,29 @@ def gerarGrafo(G, carteira_principal, scores=None):
         font_size=8
     )
 
-    labels = nx.get_edge_attributes(
-        G,
-        "valor"
-    )
+    labels = nx.get_edge_attributes(G, "valor")
 
-    nx.draw_networkx_edge_labels(
-        G,
-        pos,
-        edge_labels=labels,
-        font_size=7
-    )
+    if labels:
+        nx.draw_networkx_edge_labels(G, pos, edge_labels=labels, font_size=7)
 
     if scores:
         adicionarLegenda([
-            Patch(facecolor="red", label="Risco alto (score >= 70)"),
-            Patch(facecolor="orange", label="Risco medio (40 a 69)"),
-            Patch(facecolor="lightgreen", label="Risco baixo (1 a 39)"),
-            Patch(facecolor="lightgray", label="Sem evidencia"),
-            Line2D([0], [0], color="black", lw=1, label="Transacao")
+            Patch(facecolor="darkred", label="Risco crítico"),
+            Patch(facecolor="red", label="Risco alto"),
+            Patch(facecolor="orange", label="Risco médio"),
+            Patch(facecolor="lightgreen", label="Risco baixo"),
+            Patch(facecolor="lightgray", label="Sem evidência"),
+            Line2D([0], [0], color="black", lw=1, label="Transação")
         ])
     else:
         adicionarLegenda([
             Patch(facecolor="red", label="Carteira principal"),
-            Patch(facecolor="orange", label="No com 3 ou mais entradas"),
+            Patch(facecolor="orange", label="Nó relevante"),
             Patch(facecolor="lightblue", label="Demais carteiras"),
-            Line2D([0], [0], color="black", lw=1, label="Transacao")
+            Line2D([0], [0], color="black", lw=1, label="Transação")
         ])
 
-    plt.title("Rede de Transacoes Bitcoin - Grafo Bruto")
+    plt.title("Rede de Transações Bitcoin - Grafo")
     plt.axis("off")
     plt.tight_layout()
     plt.show()

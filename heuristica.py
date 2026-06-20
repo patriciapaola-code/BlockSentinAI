@@ -3,6 +3,7 @@ import networkx as nx
 import pandas as pd
 import numpy as np
 import json
+from collections import defaultdict
 
 # =========================
 # HEURÍSTICAS DE TRANSFORMAÇÃO
@@ -74,28 +75,52 @@ def aplicarValores(G):
             
     return G
 
-def aplicarTempo(G, janela=2592000):
-    G_novo = nx.MultiDiGraph()
-    timestamps = [
-        dados["timestamp"] 
-        for _, _, _, dados in G.edges(keys=True, data=True) 
-        if dados.get("timestamp") is not None
+def aplicarTempo(G, bin_size=7*24*3600, top_k=1):
+
+    edges = [
+        (u, v, k, d)
+        for u, v, k, d in G.edges(keys=True, data=True)
+        if d.get("timestamp") is not None
     ]
 
-    if not timestamps:
+    if not edges:
         return G
 
-    referencia = np.median(timestamps)
+    timestamps = [d["timestamp"] for _, _, _, d in edges]
 
-    for origem, destino, txid, dados in G.edges(keys=True, data=True):
-        timestamp = dados.get("timestamp")
-        
-        if timestamp is None:
-            continue
-        
-        if abs(timestamp - referencia) <= janela:
-            G_novo.add_edge(origem, destino, key=txid, **dados)
-            
+    t_min = min(timestamps)
+
+    # 1. Criar bins
+    bins = defaultdict(list)
+
+    for u, v, k, d in edges:
+        ts = d["timestamp"]
+        idx = (ts - t_min) // bin_size
+        bins[idx].append((u, v, k, d))
+
+    # 2. Calcular score de cada bin
+    bin_scores = []
+
+    for b, e_list in bins.items():
+        nodes = set()
+        for u, v, _, _ in e_list:
+            nodes.add(u)
+            nodes.add(v)
+
+        score = len(e_list) + len(nodes)  # densidade estrutural simples
+        bin_scores.append((score, b))
+
+    # 3. Selecionar top bins
+    bin_scores.sort(reverse=True)
+    selected_bins = set([b for _, b in bin_scores[:top_k]])
+
+    # 4. Construir subgrafo final
+    G_novo = nx.MultiDiGraph()
+
+    for b in selected_bins:
+        for u, v, k, d in bins[b]:
+            G_novo.add_edge(u, v, key=k, **d)
+
     return G_novo
 
 def aplicarChain(G):
@@ -295,72 +320,130 @@ def imprimirRelatorioRisco(scores, limite=10):
             f"risco={dados['risco']} | motivos: {motivos}"
         )
 
-def encontrarTrajetoriasProvaveis(G, carteira_inicial, scores, limite=3):
+def encontrarTrajetoriasProvaveis(
+    G,
+    carteira_inicial,
+    scores,
+    limite=5,
+    cutoff=6
+):
     if G.number_of_nodes() == 0 or carteira_inicial not in G:
         return []
 
-    G_simples = nx.DiGraph(G)
     trajetorias = []
+    vistos = set()
 
-    for no in G_simples.nodes():
-        if no == carteira_inicial:
+    G_work = G.copy()
+
+    # 🔥 cutoff adaptativo (evita travar em grafos maiores)
+    cutoff = max(cutoff, int(len(G_work) ** 0.3) + 2)
+
+    for destino in G_work.nodes():
+        if destino == carteira_inicial:
             continue
 
-        if not nx.has_path(G_simples, carteira_inicial, no):
+        if not nx.has_path(G_work, carteira_inicial, destino):
             continue
 
-        caminho = nx.shortest_path(G_simples, carteira_inicial, no)
-        if len(caminho) < 2:
-            continue
+        caminhos = nx.all_simple_paths(
+            G_work,
+            source=carteira_inicial,
+            target=destino,
+            cutoff=cutoff
+        )
 
-        entradas = len(set(G.predecessors(no)))
-        saidas = len(set(G.successors(no)))
-        score_no = scores.get(no, {}).get("score", 0)
+        for caminho in caminhos:
+            if len(caminho) < 2:
+                continue
 
-        score_destino = score_no
+            chave = tuple(caminho)
+            if chave in vistos:
+                continue
+            vistos.add(chave)
 
-        if saidas == 0:
-            score_destino += 25
-        elif saidas <= 1:
-            score_destino += 10
+            # =========================
+            # SCORE DO DESTINO (reduzido impacto)
+            # =========================
+            score_destino = scores.get(destino, {}).get("score", 0)
 
-        if entradas >= 3:
-            score_destino += 15
+            entradas = len(set(G_work.predecessors(destino)))
+            saidas = len(set(G_work.successors(destino)))
 
-        score_destino += min(len(caminho) * 3, 15)
+            if saidas == 0:
+                score_destino += 15
+            elif saidas <= 2:
+                score_destino += 8
 
-        trajetorias.append({
-            "destino": no,
-            "caminho": caminho,
-            "score_destino": float(round(min(score_destino, 100), 2)),
-            "score_risco": float(score_no),
-            "entradas": entradas,
-            "saidas": saidas
-        })
+            if entradas >= 3:
+                score_destino += 10
 
+            # =========================
+            # SCORE DO CAMINHO (fluxo real)
+            # =========================
+            risco_caminho = sum(
+                scores.get(no, {}).get("score", 0)
+                for no in caminho
+            )
+
+            # penalização leve (não destrói caminhos longos)
+            risco_caminho = risco_caminho / (1 + len(caminho) * 0.3)
+
+            # bônus de profundidade (mais forte que antes)
+            profundidade_bonus = min(len(caminho) * 3, 15)
+
+            # =========================
+            # SCORE FINAL BALANCEADO
+            # =========================
+            score_final = (
+                risco_caminho * 0.6 +
+                score_destino * 0.2 +
+                profundidade_bonus
+            )
+
+            trajetorias.append({
+                "destino": destino,
+                "caminho": caminho,
+                "score_final": round(score_final, 2),
+                "score_base_destino": round(score_destino, 2),
+                "entradas": entradas,
+                "saidas": saidas,
+                "tamanho_caminho": len(caminho)
+            })
+
+    # 🔥 ordenação correta (principal fix)
     trajetorias.sort(
-        key=lambda item: item["score_destino"],
+        key=lambda x: x["score_final"],
         reverse=True
     )
 
     return trajetorias[:limite]
 
 def imprimirTrajetorias(trajetorias):
-    print("\n===== TRAJETORIAS PROVAVEIS =====")
+    print("\n===== TRAJETORIAS PROVÁVEIS =====")
 
     if not trajetorias:
-        print("Nenhuma trajetoria provavel encontrada a partir da carteira inicial.")
+        print("Nenhuma trajetória provável encontrada a partir da carteira inicial.")
         return
 
     for posicao, dados in enumerate(trajetorias, start=1):
         caminho = " -> ".join(dados["caminho"])
+
         print(
             f"{posicao}. destino={dados['destino']} | "
-            f"score_destino={dados['score_destino']} | "
-            f"score_risco={dados['score_risco']} | "
+            f"score_final={dados['score_final']} | "
+            f"score_base_destino={dados['score_base_destino']} | "
+            f"tamanho={dados['tamanho_caminho']} | "
             f"entradas={dados['entradas']} | saidas={dados['saidas']}"
         )
+
         print(f"   caminho: {caminho}")
+        
+        if dados["score_final"] >= 70:
+            risco = "ALTO risco de fluxo suspeito"
+        elif dados["score_final"] >= 40:
+            risco = "risco moderado de comportamento anômalo"
+        else:
+            risco = "baixo risco observado"
 
 def topItens(dados, limite=10):
     ordenados = sorted(
@@ -372,7 +455,7 @@ def topItens(dados, limite=10):
     return [
         {
             "carteira": chave,
-            "valor": float(valor)
+            "valor": round(float(valor), 4)
         }
         for chave, valor in ordenados
     ]
@@ -392,96 +475,115 @@ def calcularSimilaridadeValores(valores):
 
     return round(max(0, 1 - coeficiente_variacao), 4)
 
-def detectarPossiveisMixers(G, limite=10):
-    candidatos = {}
-    tx_por_no = {}
+def entropia_valores(valores):
+    valores = np.array(valores)
+    if len(valores) == 0:
+        return 0
+    return np.std(valores) / (np.mean(valores) + 1e-9)
 
-    for origem, destino, chave, dados in G.edges(keys=True, data=True):
-        txid = dados.get("txid")
+
+def detectarPossiveisMixers(G, limite=10):
+    candidatos = defaultdict(lambda: {
+        "score_mixer": 0,
+        "motivos": set(),
+        "txids": set()
+    })
+
+    tx_map = defaultdict(lambda: {
+        "inputs": set(),
+        "outputs": set(),
+        "valores": []
+    })
+
+    for u, v, k, d in G.edges(keys=True, data=True):
+        txid = d.get("txid")
         if not txid:
             continue
 
-        if txid not in tx_por_no:
-            tx_por_no[txid] = {
-                "inputs": set(),
-                "outputs": set(),
-                "valores": []
-            }
+        tx_map[txid]["inputs"].add(u)
+        tx_map[txid]["outputs"].add(v)
+        tx_map[txid]["valores"].append(d.get("valor", 0))
 
-        if dados.get("tipo") == "input":
-            tx_por_no[txid]["inputs"].add(origem)
-            tx_por_no[txid]["outputs"].add(destino)
-        elif dados.get("tipo") == "output":
-            tx_por_no[txid]["inputs"].add(origem)
-            tx_por_no[txid]["outputs"].add(destino)
+    for txid, tx in tx_map.items():
+        inputs = len(tx["inputs"])
+        outputs = len(tx["outputs"])
+        valores = tx["valores"]
 
-        tx_por_no[txid]["valores"].append(dados.get("valor", 0))
+        if len(valores) == 0:
+            continue
 
-    for txid, dados_tx in tx_por_no.items():
-        qtd_inputs = len(dados_tx["inputs"])
-        qtd_outputs = len(dados_tx["outputs"])
-        similaridade = calcularSimilaridadeValores(dados_tx["valores"])
+        ent = entropia_valores(valores)
 
-        if qtd_inputs >= 3 and qtd_outputs >= 3:
-            score = 35 + min(qtd_inputs * 5, 25) + min(qtd_outputs * 5, 25)
-            score += similaridade * 15
+        score = 0
 
-            envolvidos = dados_tx["inputs"].union(dados_tx["outputs"])
+        score += min(inputs * 4, 20)
+        score += min(outputs * 4, 20)
+
+        score += ent * 30
+
+        if inputs >= 2 and outputs >= 2:
+            score += 10
+
+        if ent > 0.5:
+            score += 10
+            motivo_extra = "alta variacao de valores"
+
+        else:
+            motivo_extra = None
+
+        if score >= 25:
+            envolvidos = tx["inputs"].union(tx["outputs"])
+
             for carteira in envolvidos:
-                if carteira not in candidatos:
-                    candidatos[carteira] = {
-                        "carteira": carteira,
-                        "score_mixer": 0,
-                        "motivos": set(),
-                        "txids": set()
-                    }
-
                 candidatos[carteira]["score_mixer"] += score
                 candidatos[carteira]["txids"].add(txid)
                 candidatos[carteira]["motivos"].add(
-                    f"transacao com {qtd_inputs} inputs e {qtd_outputs} outputs"
+                    f"transacao com {inputs} inputs e {outputs} outputs"
                 )
 
-                if similaridade >= 0.75:
-                    candidatos[carteira]["motivos"].add("outputs com valores parecidos")
+                if motivo_extra:
+                    candidatos[carteira]["motivos"].add(motivo_extra)
 
     for no in G.nodes():
         entradas = len(set(G.predecessors(no)))
         saidas = len(set(G.successors(no)))
-        arestas = list(G.in_edges(no, keys=True, data=True)) + list(G.out_edges(no, keys=True, data=True))
-        valores = [dados.get("valor", 0) for _, _, _, dados in arestas]
-        similaridade = calcularSimilaridadeValores(valores)
 
-        if entradas >= 4 and saidas >= 4:
-            if no not in candidatos:
-                candidatos[no] = {
-                    "carteira": no,
-                    "score_mixer": 0,
-                    "motivos": set(),
-                    "txids": set()
-                }
+        if entradas + saidas == 0:
+            continue
 
-            candidatos[no]["score_mixer"] += 30 + min(entradas + saidas, 30)
-            candidatos[no]["motivos"].add(f"fan-in {entradas} e fan-out {saidas}")
+        valores = [
+            d.get("valor", 0)
+            for _, _, _, d in list(G.in_edges(no, keys=True, data=True)) +
+                             list(G.out_edges(no, keys=True, data=True))
+        ]
 
-            if similaridade >= 0.65:
-                candidatos[no]["score_mixer"] += 15
-                candidatos[no]["motivos"].add("valores de entrada/saida semelhantes")
+        ent = entropia_valores(valores)
+
+        score = 0
+
+        score += min((entradas + saidas) * 2, 25)
+
+        if entradas >= 3 and saidas >= 3:
+            score += 15
+            candidatos[no]["motivos"].add("hub com fluxo bidirecional")
+
+        score += ent * 20
+
+        if score >= 20:
+            candidatos[no]["score_mixer"] += score
+            candidatos[no]["motivos"].add(f"fan-in {entradas} / fan-out {saidas}")
 
     resultado = []
 
-    for dados in candidatos.values():
+    for carteira, dados in candidatos.items():
         resultado.append({
-            "carteira": dados["carteira"],
-            "score_mixer": float(round(min(dados["score_mixer"], 100), 2)),
+            "carteira": carteira,
+            "score_mixer": float(min(round(dados["score_mixer"], 2), 100)),
             "motivos": sorted(dados["motivos"]),
             "txids": sorted(dados["txids"])
         })
 
-    resultado.sort(
-        key=lambda item: item["score_mixer"],
-        reverse=True
-    )
+    resultado.sort(key=lambda x: x["score_mixer"], reverse=True)
 
     return resultado[:limite]
 

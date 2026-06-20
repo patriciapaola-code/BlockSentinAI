@@ -1,6 +1,7 @@
 import json
 import pandas as pd
 import heuristica as ht
+import numpy as np
 
 def gerarDossieInvestigativo(G, carteira_inicial, scores, trajetorias=None, possiveis_mixers=None):
     
@@ -57,6 +58,10 @@ def gerarDossieInvestigativo(G, carteira_inicial, scores, trajetorias=None, poss
     chains = ht.analisarChain(G)
     key_addresses = ht.detectarKeyAddresses(G) if G.number_of_nodes() > 0 else {}
 
+    vals = np.array([d["score"] for d in scores.values()])
+
+    threshold = np.percentile(vals, 90)
+    
     carteiras_alto_risco = [
         {
             "carteira": carteira,
@@ -69,7 +74,7 @@ def gerarDossieInvestigativo(G, carteira_inicial, scores, trajetorias=None, poss
             key=lambda item: item[1]["score"],
             reverse=True
         )
-        if dados["score"] >= 70
+        if dados["score"] >= threshold
     ]
 
     return {
