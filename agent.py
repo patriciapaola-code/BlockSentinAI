@@ -1,71 +1,52 @@
 from dotenv import load_dotenv
 import os
 import json
+
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_community.vectorstores import FAISS
 from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_core.documents import Document
 
-def criarAgent():
-    # Carregar variáveis de ambiente
+
+def iniciarAgent():
+
     load_dotenv()
     google_api_key = os.getenv("GOOGLE_API_KEY")
-      
-    if not google_api_key:
-        raise ValueError("Erro: GOOGLE_API_KEY não foi encontrada no arquivo .env")
 
-    # Criar modelo do Google Gemini
+    if not google_api_key:
+        raise ValueError("GOOGLE_API_KEY não encontrada")
+
+    # =========================
+    # LLM (único ponto de uso da API)
+    # =========================
     llm = ChatGoogleGenerativeAI(
-        model="gemini-2.5-flash"
+        model="gemini-2.5-flash-lite"
     )
 
-    # Ler arquivo JSON
-    try:
-        with open("dossie_investigativo.json", "r", encoding="utf-8") as arquivo:
-            dados = json.load(arquivo)
+    # =========================
+    # EMBEDDINGS (APENAS PARA CARREGAR INDEX)
+    # =========================
+    embeddings = HuggingFaceEmbeddings(
+        model_name="sentence-transformers/all-MiniLM-L6-v2"
+    )
 
-    except FileNotFoundError:
-        raise FileNotFoundError("Erro: O arquivo 'dossie_investigativo.json' não foi encontrado.")
-    except json.JSONDecodeError:
-        raise ValueError("Erro: O arquivo JSON está mal formatado.")
+    # =========================
+    # CARREGA FAISS PRÉ-GERADO
+    # =========================
+    vectorstore = FAISS.load_local(
+        "faiss_index",
+        embeddings,
+        allow_dangerous_deserialization=True
+    )
 
-    # Converter cada seção do JSON em um documento
-    try:
-        documents = []
+    retriever = vectorstore.as_retriever(
+        search_type="similarity",
+        search_kwargs={"k": 3}
+    )
 
-        for chave, valor in dados.items():
-            texto = (
-                f"{chave}:\n"
-                f"{json.dumps(valor, indent=2, ensure_ascii=False)}"
-            )
-
-            documents.append(
-                Document(page_content=texto)
-            )
-
-    except Exception as e:
-        raise RuntimeError(f"Erro ao criar documentos: {e}")
-
-    # Criar embeddings do Hugging Face
-    try:
-        embeddings = HuggingFaceEmbeddings(
-            model_name="sentence-transformers/all-MiniLM-L6-v2"
-        )
-
-        # Criar vectorstore FAISS
-        vectorstore = FAISS.from_documents(documents, embeddings)
-
-        # Recuperar os 3 documentos mais relevantes
-        retriever = vectorstore.as_retriever(
-            search_type="similarity",
-            search_kwargs={"k": 3}
-        )
-
-    except Exception as e:
-        raise RuntimeError(f"Erro ao criar vectorstore: {e}")
-
-    # Prompt para instruir a IA
+    # =========================
+    # PROMPT
+    # =========================
     prompt = ChatPromptTemplate.from_messages([
         (
             "system",
@@ -98,37 +79,26 @@ def criarAgent():
             Foco no Cenário Criminal: Você rastreia ransomwares, hackers e fraudadores. Interprete as movimentações sempre sob a ótica de "como um criminoso tentaria esconder esse dinheiro?".
             """
         ),
-
         (
             "human",
             "Contexto:\n{contexto}\n\nPergunta: {pergunta}"
         )
     ])
-    
-    print("\n=== Investigador Blockchain ===")
-    print("Digite 'sair' para encerrar.\n")
 
-    while True:
-        pergunta = input("Pergunta: ")
+    return llm, prompt
 
-        if pergunta.lower() == "sair":
-            break
 
-        # Recupera os documentos mais relevantes
-        docs = retriever.invoke(pergunta)
+def responder(llm, retriever, prompt, pergunta):
 
-        # Junta o conteúdo dos documentos
-        contexto = "\n\n".join(doc.page_content for doc in docs)
+    docs = retriever.invoke(pergunta)
 
-        # Monta a mensagem para o modelo
-        mensagens = prompt.invoke({
-            "contexto": contexto,
-            "pergunta": pergunta
-        })
+    contexto = "\n\n".join(d.page_content for d in docs[:3])
 
-        # Obtém a resposta do Gemini
-        resposta = llm.invoke(mensagens)
+    mensagens = prompt.invoke({
+        "contexto": contexto,
+        "pergunta": pergunta
+    })
 
-        print("\nResposta:")
-        print(resposta.content)
-        print("-" * 50)
+    resposta = llm.invoke(mensagens)
+
+    return resposta.content
