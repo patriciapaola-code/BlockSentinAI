@@ -1,6 +1,6 @@
 import json
 import pandas as pd
-import heuristica as ht
+import analise_heuristica as ht
 import numpy as np
 
 def gerarDossieInvestigativo(G, carteira_inicial, scores, trajetorias=None, possiveis_mixers=None):

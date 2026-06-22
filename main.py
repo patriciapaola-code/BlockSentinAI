@@ -1,5 +1,5 @@
-import interface as ui
-import build_vectorstore as vs
+import app_streamlit as ui
+import indexador_dossie as vs
 
 def main():
     vs.carregarVectorStore()

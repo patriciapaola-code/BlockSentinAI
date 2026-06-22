@@ -1,12 +1,12 @@
 import json
 import time
 import streamlit as st
-import etapa5_graphsense as etp5
-import heuristica as ht
-import agent as ag
-import dossie as ds
-import dashboard_graph as dg
-import gerar_grafo as etp2 
+import coleta_blockchain as etp5
+import analise_heuristica as ht
+import assistente_ia as ag
+import gerador_dossie as ds
+import visualizacao_grafo_interativo as dg
+import visualizacao_grafo_matplotlib as etp2
 import plotly.graph_objects as go
 import networkx as nx
 import pandas as pd
