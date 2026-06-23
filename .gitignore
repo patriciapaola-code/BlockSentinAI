@@ -1,4 +1,14 @@
+# Chaves e segredos
 .env
+
+
+# Cache do Python
 __pycache__/
 *.pyc
+
+# Índice FAISS
 faiss_index/
+
+
+# Arquivos de log
+*.log
