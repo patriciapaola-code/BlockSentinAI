@@ -2,7 +2,7 @@ from dotenv import load_dotenv
 import os
 import json
 
-from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_community.vectorstores import FAISS
 from langchain_huggingface import HuggingFaceEmbeddings
@@ -11,16 +11,14 @@ from langchain_huggingface import HuggingFaceEmbeddings
 def iniciarAgent():
 
     load_dotenv()
-    google_api_key = os.getenv("GOOGLE_API_KEY")
+    groq_api_key = os.getenv("GROQ_API_KEY")
 
-    if not google_api_key:
-        raise ValueError("GOOGLE_API_KEY não encontrada")
+    if not groq_api_key:
+        raise ValueError("GROQ_API_KEY não encontrada")
 
-    # =========================
-    # LLM (único ponto de uso da API)
-    # =========================
-    llm = ChatGoogleGenerativeAI(
-        model="gemini-2.5-flash"
+    llm = ChatGroq(
+        model="llama-3.3-70b-versatile",
+        temperature=0
     )
 
     # =========================
@@ -33,11 +31,18 @@ def iniciarAgent():
     # =========================
     # CARREGA FAISS PRÉ-GERADO
     # =========================
-    vectorstore = FAISS.load_local(
-        "faiss_index",
-        embeddings,
-        allow_dangerous_deserialization=True
-    )
+    index_path = "faiss_index"
+    if os.path.exists(index_path):
+        vectorstore = FAISS.load_local(
+            index_path,
+            embeddings,
+            allow_dangerous_deserialization=True
+        )
+    else:
+        # Se o índice não existe, cria um vazio para evitar erro na inicialização.
+        # O índice real será criado após o processamento do dossiê.
+        print("AVISO: Índice FAISS não encontrado. Criando um índice vazio temporário.")
+        vectorstore = FAISS.from_texts(["Ainda não há dados no dossiê."], embeddings)
 
     retriever = vectorstore.as_retriever(
         search_type="similarity",

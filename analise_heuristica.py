@@ -580,3 +580,32 @@ def analisarValores(df):
     semelhantes = df[abs(df["valor"] - media) < tolerancia]
     
     return semelhantes
+
+def analisarAutomacaoPorCarteira(G, carteira):
+    """
+    Analisa as transações de SAÍDA de uma carteira específica para detectar
+    sinais de automação (bots, scripts).
+    """
+    # Coleta apenas timestamps de arestas de SAÍDA da carteira
+    saidas = sorted(
+        [d.get("timestamp") for _, _, d in G.out_edges(carteira, data=True) if d.get("timestamp")],
+    )
+    
+    # Requer um número mínimo de amostras para uma análise confiável
+    if len(saidas) < 3:
+        return {"assinatura_automatizada": False, "intervalo_medio_segundos": None, "amostras": len(saidas)}
+
+    # Calcula a diferença em segundos entre transações consecutivas
+    diffs = np.diff(saidas)
+    intervalo_medio = float(np.mean(diffs))
+    variacao = float(np.std(diffs))
+
+    # Heurística: um bot real opera com intervalos curtos E consistentes (baixa variação)
+    assinatura_bot = bool(intervalo_medio < 120 and variacao < 30 and len(diffs) >= 3)
+
+    return {
+        "assinatura_automatizada": assinatura_bot,
+        "intervalo_medio_segundos": round(intervalo_medio, 2),
+        "variacao_intervalo_segundos": round(variacao, 2),
+        "amostras": len(diffs)
+    }

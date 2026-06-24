@@ -8,46 +8,13 @@ def gerarDossieInvestigativo(G, carteira_inicial, scores, trajetorias=None, poss
     trajetorias = trajetorias or []
     possiveis_mixers = possiveis_mixers or ht.detectarPossiveisMixers(G)
     coinjoin_suspeitas = coinjoin_suspeitas or {}
-
-    analise_comp = {
-        "pico_transacoes_por_minuto": 0,
-        "intervalo_medio_segundos": 0.0,
-        "assinatura_automatizada_detectada": False,
-        "transacoes_valores_padronizados": 0
-    }
-
-    if G.number_of_edges() > 0:
-        # Extrai os dados das arestas (edges) do NetworkX para um DataFrame
-        dados_arestas = []
-        for u, v, data in G.edges(data=True):
-            dados_arestas.append({
-                "timestamp": data.get("timestamp"),
-                "valor": data.get("valor")
-            })
-        
-        df_transacoes = pd.DataFrame(dados_arestas)
-        
-        # Executa as análises comportamentais passadas anteriormente
-        por_minuto = ht.analisarBurst(df_transacoes)
-        diferenca_tempo = ht.analisarTempo(df_transacoes)
-        valores_semelhantes = ht.analisarValores(df_transacoes)
-        
-        # Consolida as métricas se os retornos forem válidos
-        pico_burst = int(por_minuto.max()) if (por_minuto is not None and not por_minuto.empty) else 0
-        intervalo_medio = float(diferenca_tempo.mean()) if (diferenca_tempo is not None and not diferenca_tempo.empty) else 0.0
-        
-        # Heurística de automação (Desvio padrão baixo indica intervalos idênticos/scripts)
-        variacao_tempo = diferenca_tempo.std() if (diferenca_tempo is not None and not diferenca_tempo.empty) else 999
-        assinatura_bot = bool(variacao_tempo < 2.0 and len(diferenca_tempo) > 5)
-        
-        qtd_valores_padronizados = len(valores_semelhantes) if (valores_semelhantes is not None and not valores_semelhantes.empty) else 0
-        
-        analise_comp = {
-            "pico_transacoes_por_minuto": pico_burst,
-            "intervalo_medio_segundos": round(intervalo_medio, 2),
-            "assinatura_automatizada_detectada": assinatura_bot,
-            "transacoes_valores_padronizados": qtd_valores_padronizados
-        }
+    
+    # =============================================================================
+    # ANÁLISE COMPORTAMENTAL (FOCADA NA CARTEIRA INICIAL)
+    # =============================================================================
+    # A análise agora é feita especificamente sobre a carteira inicial,
+    # em vez de analisar o grafo inteiro, o que é mais preciso.
+    analise_comp = ht.analisarAutomacaoPorCarteira(G, carteira_inicial)
 
     fanin = ht.analisarFanIn(G)
     fanout = ht.analisarFanOut(G)
@@ -63,7 +30,11 @@ def gerarDossieInvestigativo(G, carteira_inicial, scores, trajetorias=None, poss
 
     vals = np.array([d["score"] for d in scores.values()])
 
-    threshold = np.percentile(vals, 90)
+    # Lida com o caso de não haver scores (grafo vazio)
+    if vals.size > 0:
+        threshold = np.percentile(vals, 90)
+    else:
+        threshold = 0
     
     carteiras_alto_risco = [
         {
@@ -118,9 +89,8 @@ def gerarDossieInvestigativo(G, carteira_inicial, scores, trajetorias=None, poss
             "Uma LLM investigadora deve usar este dossie para explicar hipoteses e incertezas.",
             "Nos com possivel mixer podem representar servicos legitimos, exchanges ou consolidadores.",
             "A analise comportamental mapeia o uso potencial de scripts e automacoes pelo atacante.",
-            "Transacoes em transacoes_coinjoin_suspeitas tem outputs de denominacao identica; "
-            "essas carteiras nao foram fundidas no clustering de common-input-ownership, mas "
-            "podem indicar coordenacao deliberada entre elas (ex.: consolidacao de pagamentos)."
+            "Transacoes em transacoes_coinjoin_suspeitas tem outputs de denominacao identica.",
+            "Essas carteiras nao foram fundidas no clustering de common-input-ownership, mas podem indicar coordenacao deliberada entre elas (ex.: consolidacao de pagamentos)."
         ]
     }
 
@@ -150,5 +120,26 @@ def imprimirDossieInvestigativo(dossie):
             print(f"- txid={tx['txid']} | motivo: {tx['motivo']} | carteiras: {len(tx['carteiras'])}")
 
 def salvarDossieInvestigativo(dossie, caminho="dossie_investigativo.json"):
-    with open(caminho, "w", encoding="utf-8") as arquivo:
-        json.dump(dossie, arquivo, ensure_ascii=False, indent=2)
+    try:
+        with open(caminho, "w", encoding="utf-8") as arquivo:
+            json.dump(dossie, arquivo, ensure_ascii=False, indent=2)
+
+        # =========================
+        # ATUALIZAÇÃO DO ÍNDICE FAISS (RAG)
+        # =========================
+        # Após salvar o JSON, também criamos/atualizamos o índice vetorial para o assistente de IA.
+        from langchain_community.vectorstores import FAISS
+        from langchain_huggingface import HuggingFaceEmbeddings
+        from langchain_core.documents import Document
+
+        # Cria um "Documento" único com todo o conteúdo do dossiê para o RAG
+        doc = Document(page_content=json.dumps(dossie, indent=2))
+        
+        embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+        
+        # Cria um novo índice FAISS a partir do documento atualizado
+        vectorstore = FAISS.from_documents([doc], embeddings)
+        vectorstore.save_local("faiss_index")
+
+    except (ImportError, Exception) as e:
+        print(f"AVISO: Falha ao salvar ou indexar o dossiê: {e}")

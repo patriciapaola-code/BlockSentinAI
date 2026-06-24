@@ -1,5 +1,4 @@
 import json
-import time
 import streamlit as st
 import coleta_blockchain as cb
 import analise_heuristica as ht
@@ -10,6 +9,7 @@ import visualizacao_grafo_matplotlib as vgm
 import plotly.graph_objects as go
 import networkx as nx
 import pandas as pd
+import os
 
 # ==============================================================================
 # 1. CONFIGURAÇÃO DE PÁGINA DO STREAMLIT (OBRIGATORIAMENTE O PRIMEIRO COMANDO)
@@ -209,9 +209,9 @@ def interface():
 
     st.title("🕵️ Dashboard Interativo - Rastreamento de Ransomware")
 
-    #wallet = "bc1qjuqyesxjgravlf0evtz5p8ks8k2w6ytcherrk3"
+    wallet = "bc1qjuqyesxjgravlf0evtz5p8ks8k2w6ytcherrk3"
     #wallet = "16FnhJgft5PxM3QNRjq9FiafkKHAAv8Ngy"
-    wallet = "bc1qeca5hd7m9latsls46ty7u5udrvwclzq4nn64n4"
+    #wallet = "bc1qeca5hd7m9latsls46ty7u5udrvwclzq4nn64n4"
 
 
     # =========================
@@ -222,6 +222,13 @@ def interface():
             historico, dossie = carregar_toda_a_blockchain(wallet)
             st.session_state.historico = historico
             st.session_state.dossie = dossie
+            
+            # SALVA O DOSSIÊ EM DISCO E ATUALIZA O ÍNDICE FAISS
+            ds.salvarDossieInvestigativo(dossie, "dossie_investigativo.json")
+            st.toast("Dossiê gerado e índice de IA criado!", icon="✅")
+            
+            # Força o recarregamento da aplicação para garantir que o estado
+            st.rerun()
 
     if "grafo_index" not in st.session_state:
         st.session_state.grafo_index = 0
@@ -387,7 +394,8 @@ def interface():
                 st.caption(
                     f"**Arestas:** "
                     f"<span style='color:#0000FF; font-weight:bold;'>━━</span> Trajetória Principal | "
-                    f"<span style='color:#4169E1; font-weight:bold;'>- - -</span> Trajetórias Secundárias",
+                    f"<span style='color:#4169E1; font-weight:bold;'>- - -</span> Trajetórias Secundárias | "
+                    f"<span style='color:#b5b0a3; font-weight:bold;'>━━</span> Transação",
                     unsafe_allow_html=True
                 )
             else:
@@ -397,7 +405,7 @@ def interface():
                     f"<span style='color:#8B0000; font-weight:bold;'>■</span> Crítico | "
                     f"<span style='color:#FF0000; font-weight:bold;'>■</span> Alto | "
                     f"<span style='color:#FFA500; font-weight:bold;'>■</span> Médio | "
-                    f"<span style='color:#008000; font-weight:bold;'>■</span> Baixo | "
+                    f"<span style='color:#83fc85; font-weight:bold;'>■</span> Baixo | "
                     f"<span style='color:#D3D3D3; font-weight:bold;'>■</span> Sem Evidência | "
                     f"Nó com **Borda Azul** = Parte de Trajetória",
                     unsafe_allow_html=True
@@ -405,7 +413,9 @@ def interface():
                 st.caption(
                     f"**Arestas:**"
                     f"<span style='color:#0000FF; font-weight:bold;'>━━</span> Trajetória Provável | "
-                    f"<span style='color:#4169E1; font-weight:bold;'>- - -</span> Trajetórias Secundárias",
+                    f"<span style='color:#4169E1; font-weight:bold;'>- - -</span> Trajetórias Secundárias | "
+                    f"<span style='color:#b5b0a3; font-weight:bold;'>━━</span> Transação",
+
                     unsafe_allow_html=True
                     )
         
@@ -560,48 +570,53 @@ def interface():
     # ================================
     with tab_chat:
 
-        st.subheader("🔎 Chat Forense Blockchain")
-        st.caption("Investigação assistida por Inteligência Artificial")
+        # Verifica se o índice FAISS já foi criado. Se não, desabilita o chat.
+        if not os.path.exists("faiss_index"):
+            st.info("O assistente de IA estará disponível assim que o processamento inicial da blockchain for concluído.")
+            st.warning("Por favor, aguarde a geração do dossiê.")
+        else:
+            st.subheader("🔎 Chat Forense Blockchain")
+            st.caption("Investigação assistida por Inteligência Artificial")
 
-        if st.session_state.agent is None:
-            with st.spinner("Inicializando o agente analítico..."):
-                st.session_state.agent = carregar_agent()
+            if st.session_state.agent is None:
+                with st.spinner("Inicializando o agente analítico..."):
+                    st.session_state.agent = carregar_agent()
 
-        llm, retriever, prompt = st.session_state.agent
+            llm, retriever, prompt = st.session_state.agent
 
-        # Exibe o histórico de mensagens
-        for msg in st.session_state.mensagens:
-            with st.chat_message(msg["role"]):
-                st.markdown(msg["content"])
+            # Exibe o histórico de mensagens
+            for msg in st.session_state.mensagens:
+                with st.chat_message(msg["role"]):
+                    st.markdown(msg["content"], unsafe_allow_html=True)
 
-        # Captura o input do usuário
-        if pergunta := st.chat_input("Sua pergunta sobre as transações:"):
-            # Adiciona a pergunta do usuário ao histórico e à tela
-            st.session_state.mensagens.append({"role": "user", "content": pergunta})
-            with st.chat_message("user"):
-                st.markdown(pergunta)
+            # Captura o input do usuário
+            if pergunta := st.chat_input("Sua pergunta sobre as transações:"):
+                # Adiciona a pergunta do usuário ao histórico e à tela
+                st.session_state.mensagens.append({"role": "user", "content": pergunta})
+                with st.chat_message("user"):
+                    st.markdown(pergunta)
 
-            # Gera e exibe a resposta da IA
-            with st.chat_message("assistant"):
-                placeholder = st.empty()
-                placeholder.markdown("🧠 Analisando dados...")
-                try:
-                    resposta = ag.responder(
-                        llm,
-                        retriever,
-                        prompt,
-                        pergunta
-                    )
-                    placeholder.markdown(resposta)
-                    st.session_state.mensagens.append({"role": "assistant", "content": resposta})
-                
-                except Exception as e:
-                    error_message = f"Ocorreu um erro: {e}"
-                    if "429" in str(e) or "Quota exceeded" in str(e):
-                        error_message = "🚨 Limite de requisições à API atingido. Por favor, aguarde um minuto antes de tentar novamente."
+                # Gera e exibe a resposta da IA
+                with st.chat_message("assistant"):
+                    placeholder = st.empty()
+                    placeholder.markdown("🧠 Analisando dados...")
+                    try:
+                        resposta = ag.responder(
+                            llm,
+                            retriever,
+                            prompt,
+                            pergunta
+                        )
+                        placeholder.markdown(resposta, unsafe_allow_html=True)
+                        st.session_state.mensagens.append({"role": "assistant", "content": resposta})
                     
-                    placeholder.error(error_message)
-                    st.session_state.mensagens.append({"role": "assistant", "content": error_message})
-            
-            # Força a re-execução para limpar o campo de input e evitar reenvio
-            st.rerun()
+                    except Exception as e:
+                        error_message = f"Ocorreu um erro: {e}"
+                        if "429" in str(e) or "Quota exceeded" in str(e):
+                            error_message = "🚨 Limite de requisições à API atingido. Por favor, aguarde um minuto antes de tentar novamente."
+                        
+                        placeholder.error(error_message)
+                        st.session_state.mensagens.append({"role": "assistant", "content": error_message})
+                
+                # Força a re-execução para limpar o campo de input e evitar reenvio
+                st.rerun()
