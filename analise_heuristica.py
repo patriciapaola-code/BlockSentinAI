@@ -3,145 +3,169 @@ import networkx as nx
 import pandas as pd
 import numpy as np
 import json
-from collections import defaultdict
+from collections import Counter, defaultdict
 
 # =========================
 # HEURÍSTICAS DE TRANSFORMAÇÃO
 # =========================
 
-def heuristicaMultiInput(G):
+def detectarSuspeitaCoinJoin(tx_outputs):
+    valores_saida = [v for _, v in tx_outputs if v and v > 0]
+
+    if len(valores_saida) < 3:
+        return False, None
+
+    arredondados = [round(v, 8) for v in valores_saida]
+    contagem = Counter(arredondados)
+    valor_mais_comum, freq = contagem.most_common(1)[0]
+
+    proporcao = freq / len(arredondados)
+
+    if freq >= 3 and proporcao >= 0.5:
+        return True, f"{freq} outputs com valor idêntico ({valor_mais_comum})"
+
+    return False, None
+
+def heuristicaMultiInput(G, limite_inputs_mixer=30):
     uf = UnionFind()
-    tx_inputs = {}
+    tx_map = {}
 
-    # Agrupa todas as origens (inputs) pelo ID da transação (txid/key)
-    for origem, destino, chave, dados in G.edges(keys=True, data=True):
-        if dados.get("tipo") != "input":
-            continue
-
-        txid = dados.get("txid")
+    for u, v, k, d in G.edges(keys=True, data=True):
+        txid = d.get("txid")
         if not txid:
             continue
 
-        if txid not in tx_inputs:
-            tx_inputs[txid] = set()
+        if txid not in tx_map:
+            tx_map[txid] = {"inputs": set(), "outputs": []}
 
-        tx_inputs[txid].add(origem)
+        tipo = d.get("tipo")
+        valor = d.get("valor", 0)
 
-    # Se houver mais de uma origem para a mesma transação, unifica sob a mesma entidade
-    for txid, origens in tx_inputs.items():
-        origens_lista = list(origens)
-        if len(origens_lista) > 1:
-            principal = origens_lista[0]
-            for carteira in origens_lista[1:]:
-                uf.union(principal, carteira)
-    return uf
+        if tipo == "input":
+            tx_map[txid]["inputs"].add(u)
+        elif tipo == "output":
+            tx_map[txid]["outputs"].append((v, valor))
 
+    coinjoin_suspeitas = {}  # motivo para alimentar o score de risco depois
+
+    for txid, tx in tx_map.items():
+        inputs = list(tx["inputs"])
+        outputs = tx["outputs"]
+
+        if len(inputs) <= 1:
+            continue
+
+        suspeito, motivo = detectarSuspeitaCoinJoin(outputs)
+        if suspeito:
+            coinjoin_suspeitas[txid] = {
+                "motivo": motivo,
+                "carteiras": sorted(inputs)
+            }
+
+        # só exclui o union em casos extremos, típicos de serviços de mixing
+        if len(inputs) > limite_inputs_mixer:
+            continue
+
+        base = inputs[0]
+        for carteira in inputs[1:]:
+            uf.union(base, carteira)
+
+    return uf, coinjoin_suspeitas
 def aplicarChangeAddress(G):
     G_novo = G.copy()
-    
     for no in list(G.nodes()):
-        if no not in G_novo: 
+        if no not in G_novo:
             continue
-            
-        sucessores = sorted(set(G_novo.successors(no)))
-        
-        # Só avalia se houver exatamente 2 carteiras de destino únicas
-        if len(sucessores) == 2:
-            destino1, destino2 = sucessores[0], sucessores[1]
-            
-            # Funde o nó se um dos destinos for uma carteira "folha" (novo endereço de troco)
-            if G_novo.out_degree(destino1) == 0:
-                G_novo = nx.contracted_nodes(G_novo, no, destino1, self_loops=False)
-            elif G_novo.out_degree(destino2) == 0:
-                G_novo = nx.contracted_nodes(G_novo, no, destino2, self_loops=False)
-                
+        tx_outs = defaultdict(list)
+        for u, v, k, d in G_novo.out_edges(no, keys=True, data=True):
+            tx_outs[d.get("txid")].append((v, d.get("valor", 0)))
+
+        for txid, dados_edges in tx_outs.items():
+            if txid is None or len(dados_edges) != 2:
+                continue
+            (dest1, val1), (dest2, val2) = dados_edges
+            total = val1 + val2
+            if total == 0:
+                continue
+            if val1 < total * 0.3:
+                possivel_troco = dest1
+            elif val2 < total * 0.3:
+                possivel_troco = dest2
+            else:
+                continue
+            if possivel_troco in G_novo and G_novo.degree(possivel_troco) <= 1:
+                G_novo = nx.contracted_nodes(G_novo, no, possivel_troco, self_loops=False)
     return G_novo
 
 def aplicarValores(G):
-    valores = [dados.get("valor", 0) for _, _, _, dados in G.edges(keys=True, data=True)]
-    
-    if not valores:
-        return G
-        
-    mediana = np.median(valores)
+    tx_map = defaultdict(list)
 
-    for origem, destino, txid, dados in G.edges(keys=True, data=True):
-        valor = dados.get("valor", 0)
-        
-        if 0.5 * mediana <= valor <= 1.5 * mediana:
-            dados["valor_semelhante"] = True
-        else:
-            dados["valor_semelhante"] = False
-            
+    for u, v, k, d in G.edges(keys=True, data=True):
+        txid = d.get("txid")
+        if txid is not None:
+            tx_map[txid].append(d)
+
+    for txid, edges in tx_map.items():
+        valores = [d.get("valor", 0) for d in edges]
+
+        if len(valores) < 2:
+            continue
+
+        mediana = np.median(valores)
+
+        for d in edges:
+            valor = d.get("valor", 0)
+            d["valor_semelhante"] = (0.7 * mediana <= valor <= 1.3 * mediana)
+
     return G
 
-def aplicarTempo(G, bin_size=7*24*3600, top_k=1):
+def aplicarTempo(G, bin_size=7*24*3600):
+    G_novo = G.copy()
 
-    edges = [
-        (u, v, k, d)
-        for u, v, k, d in G.edges(keys=True, data=True)
-        if d.get("timestamp") is not None
-    ]
+    edges = [(u, v, k, d) for u, v, k, d in G.edges(keys=True, data=True)
+             if d.get("timestamp") is not None]
 
     if not edges:
-        return G
+        return G_novo
 
     timestamps = [d["timestamp"] for _, _, _, d in edges]
-
     t_min = min(timestamps)
 
-    # 1. Criar bins
     bins = defaultdict(list)
 
     for u, v, k, d in edges:
-        ts = d["timestamp"]
+        idx = (d["timestamp"] - t_min) // bin_size
+        bins[idx].append(d)
+
+    # acha bin de maior atividade
+    melhor_bin = max(bins.items(), key=lambda x: len(x[1]))[0]
+
+    for u, v, k, d in G_novo.edges(keys=True, data=True):
+        ts = d.get("timestamp")
+        if ts is None:
+            continue
+
         idx = (ts - t_min) // bin_size
-        bins[idx].append((u, v, k, d))
 
-    # 2. Calcular score de cada bin
-    bin_scores = []
-
-    for b, e_list in bins.items():
-        nodes = set()
-        for u, v, _, _ in e_list:
-            nodes.add(u)
-            nodes.add(v)
-
-        score = len(e_list) + len(nodes)  # densidade estrutural simples
-        bin_scores.append((score, b))
-
-    # 3. Selecionar top bins
-    bin_scores.sort(reverse=True)
-    selected_bins = set([b for _, b in bin_scores[:top_k]])
-
-    # 4. Construir subgrafo final
-    G_novo = nx.MultiDiGraph()
-
-    for b in selected_bins:
-        for u, v, k, d in bins[b]:
-            G_novo.add_edge(u, v, key=k, **d)
+        if idx == melhor_bin:
+            d["burst"] = True
+        else:
+            d["burst"] = False
 
     return G_novo
 
 def aplicarChain(G):
     G_novo = G.copy()
-    
-    for no in list(G.nodes()):
-        if no not in G_novo: 
-            continue
-        
-        entradas_unicas = list(set(G_novo.predecessors(no)))
-        saidas_unicas = list(set(G_novo.successors(no)))
 
-        if len(entradas_unicas) == 1 and len(saidas_unicas) == 1:
-            pred = entradas_unicas[0]
-            succ = saidas_unicas[0]
+    for no in G.nodes():
+        entradas = set(G.predecessors(no))
+        saidas = set(G.successors(no))
 
-            if pred != succ:
-                valor_total = sum(d.get("valor", 0) for _, _, d in G_novo.edges(no, data=True))
-                G_novo.add_edge(pred, succ, key=f"fused_{no}", valor=valor_total)
-                G_novo.remove_node(no)
-                
+        if len(entradas) == 1 and len(saidas) == 1:
+            G_novo.nodes[no]["chain_node"] = True
+        else:
+            G_novo.nodes[no]["chain_node"] = False
+
     return G_novo
 
 # =========================
@@ -184,16 +208,6 @@ def analisarClusters(G):
     G_simples = nx.DiGraph(G)
     return list(nx.weakly_connected_components(G_simples))
 
-def analisarChain(G):
-    chains = []
-    for no in G.nodes():
-        entradas_unicas = set(G.predecessors(no))
-        saidas_unicas = set(G.successors(no))
-        
-        if len(entradas_unicas) == 1 and len(saidas_unicas) == 1:
-            chains.append(no)
-    return chains
-
 def detectarKeyAddresses(G):
     G_simples = nx.DiGraph(G)
     pagerank = nx.pagerank(G_simples)
@@ -221,10 +235,12 @@ def classificarRisco(score):
         return "BAIXO"
     return "SEM EVIDENCIA"
 
-def calcularScoreRisco(G, carteira_inicial):
+def calcularScoreRisco(G, carteira_inicial, coinjoin_suspeitas=None):
     if G.number_of_nodes() == 0:
         return {}
 
+    # Garante que coinjoin_suspeitas seja sempre um dicionário, mesmo se for None.
+    coinjoin_suspeitas = coinjoin_suspeitas or {}
     G_simples = nx.DiGraph(G)
     G_nao_direcionado = G_simples.to_undirected()
 
@@ -254,7 +270,6 @@ def calcularScoreRisco(G, carteira_inicial):
     maior_pagerank = max(pagerank.values(), default=0)
     maior_betweenness = max(betweenness.values(), default=0)
 
-    chain_nodes = set(analisarChain(G))
     scores = {}
 
     for no in G.nodes():
@@ -287,13 +302,30 @@ def calcularScoreRisco(G, carteira_inicial):
         score += between_score
 
         arestas = list(G.in_edges(no, keys=True, data=True)) + list(G.out_edges(no, keys=True, data=True))
+
         if any(dados.get("valor_semelhante") for _, _, _, dados in arestas):
             score += 10
             motivos.append("transaciona valores semelhantes")
 
-        if no in chain_nodes:
+        if any(dados.get("burst") for _, _, _, dados in arestas):
+            score += 15
+            motivos.append("atividade em janela temporal suspeita")
+
+        if G.nodes[no].get("chain_node", False):
             score += 5
             motivos.append("participa de cadeia simples")
+
+        # Sinal de CoinJoin: checa pelo txid presente nas arestas do no atual,
+        # nao pelo ID da carteira (que pode ter mudado por fusao de nos)
+        txids_no = {d.get("txid") for _, _, _, d in arestas if d.get("txid")}
+        txids_suspeitos = txids_no & coinjoin_suspeitas.keys()
+
+        if txids_suspeitos:
+            score += 8
+            motivos.append(
+                f"participou de {len(txids_suspeitos)} transacao(oes) "
+                f"com denominacao suspeita de CoinJoin"
+            )
 
         score = float(min(100, round(score, 2)))
         scores[no] = {
@@ -320,103 +352,31 @@ def imprimirRelatorioRisco(scores, limite=10):
             f"risco={dados['risco']} | motivos: {motivos}"
         )
 
-def encontrarTrajetoriasProvaveis(
-    G,
-    carteira_inicial,
-    scores,
-    limite=5,
-    cutoff=6
-):
-    if G.number_of_nodes() == 0 or carteira_inicial not in G:
+def encontrarTrajetoriasProvaveis(G, carteira_inicial, scores, limite=5):
+    if carteira_inicial not in G:
         return []
 
-    trajetorias = []
-    vistos = set()
-
-    G_work = G.copy()
-
-    # 🔥 cutoff adaptativo (evita travar em grafos maiores)
-    cutoff = max(cutoff, int(len(G_work) ** 0.3) + 2)
-
-    for destino in G_work.nodes():
-        if destino == carteira_inicial:
-            continue
-
-        if not nx.has_path(G_work, carteira_inicial, destino):
-            continue
-
-        caminhos = nx.all_simple_paths(
-            G_work,
-            source=carteira_inicial,
-            target=destino,
-            cutoff=cutoff
-        )
-
-        for caminho in caminhos:
-            if len(caminho) < 2:
-                continue
-
-            chave = tuple(caminho)
-            if chave in vistos:
-                continue
-            vistos.add(chave)
-
-            # =========================
-            # SCORE DO DESTINO (reduzido impacto)
-            # =========================
-            score_destino = scores.get(destino, {}).get("score", 0)
-
-            entradas = len(set(G_work.predecessors(destino)))
-            saidas = len(set(G_work.successors(destino)))
-
-            if saidas == 0:
-                score_destino += 15
-            elif saidas <= 2:
-                score_destino += 8
-
-            if entradas >= 3:
-                score_destino += 10
-
-            # =========================
-            # SCORE DO CAMINHO (fluxo real)
-            # =========================
-            risco_caminho = sum(
-                scores.get(no, {}).get("score", 0)
-                for no in caminho
-            )
-
-            # penalização leve (não destrói caminhos longos)
-            risco_caminho = risco_caminho / (1 + len(caminho) * 0.3)
-
-            # bônus de profundidade (mais forte que antes)
-            profundidade_bonus = min(len(caminho) * 3, 15)
-
-            # =========================
-            # SCORE FINAL BALANCEADO
-            # =========================
-            score_final = (
-                risco_caminho * 0.6 +
-                score_destino * 0.2 +
-                profundidade_bonus
-            )
-
-            trajetorias.append({
-                "destino": destino,
-                "caminho": caminho,
-                "score_final": round(score_final, 2),
-                "score_base_destino": round(score_destino, 2),
-                "entradas": entradas,
-                "saidas": saidas,
-                "tamanho_caminho": len(caminho)
-            })
-
-    # 🔥 ordenação correta (principal fix)
-    trajetorias.sort(
-        key=lambda x: x["score_final"],
+    candidatos_destino = sorted(
+        (n for n in G.nodes() if n != carteira_inicial),
+        key=lambda n: scores.get(n, {}).get("score", 0),
         reverse=True
-    )
+    )[:20]  # limita o universo de destinos a investigar
 
-    return trajetorias[:limite]
+    trajetorias = []
+    for destino in candidatos_destino:
+        try:
+            caminho = nx.shortest_path(G, carteira_inicial, destino)
+        except nx.NetworkXNoPath:
+            continue
+        score_medio = np.mean([scores.get(no, {}).get("score", 0) for no in caminho])
+        trajetorias.append({
+            "destino": destino, "caminho": caminho,
+            "score_final": round(score_medio, 2),
+            "tamanho_caminho": len(caminho)
+        })
+        if len(trajetorias) >= limite:
+            break
+    return trajetorias
 
 def imprimirTrajetorias(trajetorias):
     print("\n===== TRAJETORIAS PROVÁVEIS =====")
@@ -437,13 +397,15 @@ def imprimirTrajetorias(trajetorias):
         )
 
         print(f"   caminho: {caminho}")
-        
+
         if dados["score_final"] >= 70:
             risco = "ALTO risco de fluxo suspeito"
         elif dados["score_final"] >= 40:
             risco = "risco moderado de comportamento anômalo"
         else:
             risco = "baixo risco observado"
+
+        print(f"   avaliacao: {risco}")
 
 def topItens(dados, limite=10):
     ordenados = sorted(
@@ -475,7 +437,7 @@ def calcularSimilaridadeValores(valores):
 
     return round(max(0, 1 - coeficiente_variacao), 4)
 
-def entropia_valores(valores):
+def coeficienteVariacao(valores):
     valores = np.array(valores)
     if len(valores) == 0:
         return 0
@@ -512,7 +474,7 @@ def detectarPossiveisMixers(G, limite=10):
         if len(valores) == 0:
             continue
 
-        ent = entropia_valores(valores)
+        ent = coeficienteVariacao(valores)
 
         score = 0
 
@@ -557,7 +519,7 @@ def detectarPossiveisMixers(G, limite=10):
                              list(G.out_edges(no, keys=True, data=True))
         ]
 
-        ent = entropia_valores(valores)
+        ent = coeficienteVariacao(valores)
 
         score = 0
 

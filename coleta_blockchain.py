@@ -78,7 +78,7 @@ def obterNeighbors(address, limite_transacoes):
 
         return []
 
-def expandirGrafo(address, profundidade, max_vizinhos, max_nos):
+def expandirGrafo(address, profundidade, max_vizinhos, max_nos, max_edges):
     G = nx.MultiDiGraph()
     fila = [address]
     visitados = set()
@@ -116,13 +116,18 @@ def expandirGrafo(address, profundidade, max_vizinhos, max_nos):
                     tipo=vizinho["tipo"]
                 )
 
+                # Verifica o limite de arestas a cada adição
+                if G.number_of_edges() >= max_edges:
+                    print(f"Limite global de arestas ({max_edges}) atingido.")
+                    return G
+
                 if destino not in visitados and destino not in proxima_fila:
                     proxima_fila.append(destino)
 
             if G.number_of_nodes() >= max_nos:
                 print(f"Limite global de nós ({max_nos}) atingido.")
                 return G
-
+            
         fila = proxima_fila
         nivel += 1
 

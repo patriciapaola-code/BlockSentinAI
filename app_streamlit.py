@@ -1,12 +1,12 @@
 import json
 import time
 import streamlit as st
-import coleta_blockchain as etp5
+import coleta_blockchain as cb
 import analise_heuristica as ht
 import assistente_ia as ag
 import gerador_dossie as ds
 import visualizacao_grafo_interativo as dg
-import visualizacao_grafo_matplotlib as etp2
+import visualizacao_grafo_matplotlib as vgm
 import plotly.graph_objects as go
 import networkx as nx
 import pandas as pd
@@ -29,29 +29,29 @@ def carregar_toda_a_blockchain(wallet):
     # =========================
     # 1. GRAFO BRUTO
     # =========================
-    G_bruto = etp5.expandirGrafo(wallet, profundidade=4, 
-                                  max_vizinhos=100, max_nos=500)
+    G_bruto = cb.expandirGrafo(wallet, profundidade=4, 
+                                  max_vizinhos=100, max_nos=500, max_edges=600)
     score_bruto = ht.calcularScoreRisco(G_bruto, wallet)
     historico.append({
         "nome": "1. Grafo Bruto",
         "grafo": G_bruto,
         "scores": score_bruto,
-        "caminho": None
+        "trajetorias": []
     })
     
     # =========================
     # 2. MULTI INPUT (Agrupa donos)
     # =========================
-    uf = ht.heuristicaMultiInput(G_bruto)
-    G_multi = etp5.construirGrafoFiltrado(G_bruto, uf)
+    uf, coinjoin_suspeitas = ht.heuristicaMultiInput(G_bruto)
+    G_multi = cb.construirGrafoFiltrado(G_bruto, uf)
     
-    score_multi = ht.calcularScoreRisco(G_multi, wallet)
-    trajetorias_multi = ht.encontrarTrajetoriasProvaveis(G_multi, wallet, score_multi)
+    score_multi = ht.calcularScoreRisco(G_multi, wallet, coinjoin_suspeitas=coinjoin_suspeitas)
+    trajetorias_multi = ht.encontrarTrajetoriasProvaveis(nx.DiGraph(G_multi), wallet, score_multi)
     historico.append({
         "nome": "2. Multi-Input (Agrupamento de Carteiras)",
         "grafo": G_multi,
         "scores": score_multi,
-        "caminho": trajetorias_multi[0]["caminho"] if trajetorias_multi else None
+        "trajetorias": trajetorias_multi
     })
     
     # =========================
@@ -59,13 +59,13 @@ def carregar_toda_a_blockchain(wallet):
     # =========================
     G_valores = ht.aplicarValores(G_multi)
     
-    score_valores = ht.calcularScoreRisco(G_valores, wallet)
-    trajetorias_valores = ht.encontrarTrajetoriasProvaveis(G_valores, wallet, score_valores)
+    score_valores = ht.calcularScoreRisco(G_valores, wallet, coinjoin_suspeitas=coinjoin_suspeitas)
+    trajetorias_valores = ht.encontrarTrajetoriasProvaveis(nx.DiGraph(G_valores), wallet, score_valores)
     historico.append({
         "nome": "3. Análise de Valores",
         "grafo": G_valores,
         "scores": score_valores,
-        "caminho": trajetorias_valores[0]["caminho"] if trajetorias_valores else None
+        "trajetorias": trajetorias_valores
     })
     
     # =========================
@@ -73,13 +73,13 @@ def carregar_toda_a_blockchain(wallet):
     # =========================
     G_tempo = ht.aplicarTempo(G_valores)
     
-    score_tempo = ht.calcularScoreRisco(G_tempo, wallet)
-    trajetorias_tempo = ht.encontrarTrajetoriasProvaveis(G_tempo, wallet, score_tempo)
+    score_tempo = ht.calcularScoreRisco(G_tempo, wallet, coinjoin_suspeitas=coinjoin_suspeitas)
+    trajetorias_tempo = ht.encontrarTrajetoriasProvaveis(nx.DiGraph(G_tempo), wallet, score_tempo)
     historico.append({
         "nome": "4. Filtro Temporal",
         "grafo": G_tempo,
         "scores": score_tempo,
-        "caminho": trajetorias_tempo[0]["caminho"] if trajetorias_tempo else None
+        "trajetorias": trajetorias_tempo
     })
     
     # =========================
@@ -87,13 +87,13 @@ def carregar_toda_a_blockchain(wallet):
     # =========================
     G_change = ht.aplicarChangeAddress(G_tempo)
     
-    score_change = ht.calcularScoreRisco(G_change, wallet)
-    trajetorias_change = ht.encontrarTrajetoriasProvaveis(G_change, wallet, score_change)
+    score_change = ht.calcularScoreRisco(G_change, wallet, coinjoin_suspeitas=coinjoin_suspeitas)
+    trajetorias_change = ht.encontrarTrajetoriasProvaveis(nx.DiGraph(G_change), wallet, score_change)
     historico.append({
         "nome": "5. Change Address (Remoção de Troco)",
         "grafo": G_change,
         "scores": score_change,
-        "caminho": trajetorias_change[0]["caminho"] if trajetorias_change else None
+        "trajetorias": trajetorias_change
     })
     
     # =========================
@@ -101,24 +101,36 @@ def carregar_toda_a_blockchain(wallet):
     # =========================
     G_chain = ht.aplicarChain(G_change)
     
-    score_chain = ht.calcularScoreRisco(G_chain, wallet)
-    trajetorias_chain = ht.encontrarTrajetoriasProvaveis(G_chain, wallet, score_chain)
+    score_chain = ht.calcularScoreRisco(G_chain, wallet, coinjoin_suspeitas=coinjoin_suspeitas)
+    trajetorias_chain = ht.encontrarTrajetoriasProvaveis(nx.DiGraph(G_chain), wallet, score_chain)
     historico.append({
         "nome": "6. Simplificação de Cadeias",
         "grafo": G_chain,
         "scores": score_chain,
-        "caminho": trajetorias_chain[0]["caminho"] if trajetorias_chain else None
+        "trajetorias": trajetorias_chain
     })
     
     # =========================
     # 7. DOSSIÊ FINAL
     # =========================
-    possiveis_mixers = ht.detectarPossiveisMixers(G_chain)
+    possiveis_mixers_final = ht.detectarPossiveisMixers(G_chain)
     dossie = ds.gerarDossieInvestigativo(
         G_chain, wallet, score_chain, 
-        trajetorias_chain, possiveis_mixers
+        trajetorias_chain, possiveis_mixers_final, coinjoin_suspeitas=coinjoin_suspeitas
     )
-    
+
+    # =========================
+    # 8. ETAPA FINAL (VISUALIZAÇÃO CONSOLIDADA)
+    # =========================
+    historico.append({
+        "nome": "7. Grafo Final (Consolidado)",
+        "grafo": G_chain,
+        "scores": score_chain,
+        "trajetorias": trajetorias_chain,
+        "possiveis_mixers": dossie.get("possiveis_mixers", []),
+        "carteiras_alto_risco": dossie.get("carteiras_alto_risco", [])
+    })
+
     return historico, dossie
 
 def mostrar_metricas_reducao(historico):
@@ -165,102 +177,6 @@ def carregar_agent():
 def cached_retrieve(_retriever, query):
     return _retriever.invoke(query)
 
-def iniciarChat(llm, prompt):
-
-    st.markdown("""
-        <style>
-        .stChatMessage { font-size: 15px; }
-        .block-container { padding-top: 2rem; }
-        </style>
-    """, unsafe_allow_html=True)
-
-    # =========================
-    # STATE INICIAL
-    # =========================
-    if "mensagens" not in st.session_state:
-        st.session_state.mensagens = [
-            {
-                "role": "assistant",
-                "content": "Sou o investigador forense. Pergunte sobre o grafo ou transações suspeitas."
-            }
-        ]
-
-    if "last_llm_call" not in st.session_state:
-        st.session_state.last_llm_call = 0
-
-    if "processing" not in st.session_state:
-        st.session_state.processing = False
-
-    # =========================
-    # EXIBIÇÃO HISTÓRICO
-    # =========================
-    for msg in st.session_state.mensagens:
-        with st.chat_message(msg["role"]):
-            st.markdown(msg["content"])
-
-    # =========================
-    # INPUT
-    # =========================
-    pergunta = st.chat_input("Sua pergunta sobre as transações:")
-
-    # =========================
-    # CONTROLE PRINCIPAL
-    # =========================
-    if pergunta:
-
-        pergunta_limpa = pergunta.strip()
-        if not pergunta_limpa:
-            st.stop()
-
-        if st.session_state.processing:
-            st.warning("Já estou processando uma pergunta. Aguarde...")
-            st.stop()
-
-        st.session_state.processing = True
-
-        try:
-            now = time.time()
-            if now - st.session_state.last_llm_call < 3:
-                st.warning("⏳ Aguarde alguns segundos antes de enviar outra pergunta.")
-                st.stop()
-
-            st.session_state.last_llm_call = now
-
-            st.session_state.mensagens.append(
-                {"role": "user", "content": pergunta_limpa}
-            )
-
-            with st.chat_message("user"):
-                st.markdown(pergunta_limpa)
-
-            with st.chat_message("assistant"):
-                placeholder = st.empty()
-                placeholder.markdown("🧠 Analisando dados...")
-
-                contexto = json.dumps(st.session_state.dossie, ensure_ascii=False)
-
-                mensagens = prompt.invoke({
-                    "contexto": contexto,
-                    "pergunta": pergunta_limpa
-                })
-
-                resposta = llm.invoke(mensagens).content
-
-                placeholder.markdown(resposta)
-
-                st.session_state.mensagens.append(
-                    {"role": "assistant", "content": resposta}
-                )
-
-        except Exception as e:
-            if "429" in str(e) or "Quota exceeded" in str(e):
-                st.error("🚨 Limite de requisições atingido. Aguarde 30–60 segundos.")
-            else:
-                st.error(f"Erro: {e}")
-
-        finally:
-            st.session_state.processing = False
-
 # ==============================================================================
 # 3. INTERFACE DO USUÁRIO E CONTROLE DE EXIBIÇÃO (STREAMLIT UI)
 # ==============================================================================
@@ -293,7 +209,10 @@ def interface():
 
     st.title("🕵️ Dashboard Interativo - Rastreamento de Ransomware")
 
-    wallet = "bc1q4my6vqq8cg689drf9jccqudjclv67sz4cudkyd"
+    #wallet = "bc1qjuqyesxjgravlf0evtz5p8ks8k2w6ytcherrk3"
+    #wallet = "16FnhJgft5PxM3QNRjq9FiafkKHAAv8Ngy"
+    wallet = "bc1qeca5hd7m9latsls46ty7u5udrvwclzq4nn64n4"
+
 
     # =========================
     # INIT GLOBAL STATE
@@ -309,6 +228,18 @@ def interface():
 
     if "agent" not in st.session_state:
         st.session_state.agent = None
+        
+    if "mensagens" not in st.session_state:
+        st.session_state.mensagens = [{
+            "role": "assistant", 
+            "content": "Sou o investigador forense. Pergunte sobre o grafo ou transações suspeitas."
+        }]
+
+    # Inicializa o estado das opções de visualização
+    if "mostrar_nomes" not in st.session_state:
+        st.session_state.mostrar_nomes = True
+    if "mostrar_valores" not in st.session_state:
+        st.session_state.mostrar_valores = True
 
     # =========================
     # TABS
@@ -402,12 +333,18 @@ def interface():
         with col1:
             if st.button("⬅️", key="prev"):
                 if st.session_state.grafo_index > 0:
+                    # Reseta as opções de visualização ao navegar
+                    st.session_state.mostrar_nomes = True
+                    st.session_state.mostrar_valores = True
                     st.session_state.grafo_index -= 1
                     st.rerun()
 
         with col3:
             if st.button("➡️", key="next"):
                 if st.session_state.grafo_index < len(historico) - 1:
+                    # Reseta as opções de visualização ao navegar
+                    st.session_state.mostrar_nomes = True
+                    st.session_state.mostrar_valores = True
                     st.session_state.grafo_index += 1
                     st.rerun()
 
@@ -426,10 +363,11 @@ def interface():
             st.metric("Carteiras Alto Risco", 
                     len([s for s in etapa['scores'].values() if s['risco'] == 'ALTO']))
         with col4:
-            if etapa['caminho']:
-                st.metric("Tamanho da Rota", len(etapa['caminho']))
+            trajetorias = etapa.get('trajetorias', [])
+            if trajetorias:
+                st.metric("Tamanho da Rota Principal", len(trajetorias[0].get('caminho', [])))
             else:
-                st.metric("Tamanho da Rota", "N/A")
+                st.metric("Tamanho da Rota Principal", "N/A")
 
         st.divider()
 
@@ -437,24 +375,51 @@ def interface():
         # LEGENDA
         # =========================
         with st.columns([1])[0]:
-            # Nós
-            st.caption(
-                f"**Nós (Grau de Risco):** "
-                f"🟤 `{dg.corPorRiscoHex(80)}` Crítico | "
-                f"🔴 `{dg.corPorRiscoHex(60)}` Alto | "
-                f"🟠 `{dg.corPorRiscoHex(40)}` Médio | "
-                f"🟢 `{dg.corPorRiscoHex(1)}` Baixo | "
-                f"⬜ `{dg.corPorRiscoHex(0)}` Sem Evidência"
-            )
-            # Arestas
-            st.caption(
-                f"**Arestas (Fluxo Financeiro):** "
-                f"🔵 Linha Azul Espessa = Trajetória Investigativa Destacada | "
-                f"⚪ Linha Cinza = Fluxo Transacional Comum | "
-            )
+            if etapa["nome"] == "7. Grafo Final (Consolidado)":
+                st.caption(
+                    f"**Nós:** "
+                    f"<span style='color:#006400; font-weight:bold;'>■</span> Carteira Inicial | "
+                    f"<span style='color:#8400FF; font-weight:bold;'>■</span> Possível Mixer | "
+                    f"<span style='color:#800000; font-weight:bold;'>■</span> Alto Risco | "
+                    f"Nó com **Borda Azul** = Parte de Trajetória",
+                    unsafe_allow_html=True
+                )
+                st.caption(
+                    f"**Arestas:** "
+                    f"<span style='color:#0000FF; font-weight:bold;'>━━</span> Trajetória Principal | "
+                    f"<span style='color:#4169E1; font-weight:bold;'>- - -</span> Trajetórias Secundárias",
+                    unsafe_allow_html=True
+                )
+            else:
+                st.caption(
+                    f"**Nós (Grau de Risco):** "
+                    f"<span style='color:#006400; font-weight:bold;'>■</span> Carteira Inicial | "
+                    f"<span style='color:#8B0000; font-weight:bold;'>■</span> Crítico | "
+                    f"<span style='color:#FF0000; font-weight:bold;'>■</span> Alto | "
+                    f"<span style='color:#FFA500; font-weight:bold;'>■</span> Médio | "
+                    f"<span style='color:#008000; font-weight:bold;'>■</span> Baixo | "
+                    f"<span style='color:#D3D3D3; font-weight:bold;'>■</span> Sem Evidência | "
+                    f"Nó com **Borda Azul** = Parte de Trajetória",
+                    unsafe_allow_html=True
+                )
+                st.caption(
+                    f"**Arestas:**"
+                    f"<span style='color:#0000FF; font-weight:bold;'>━━</span> Trajetória Provável | "
+                    f"<span style='color:#4169E1; font-weight:bold;'>- - -</span> Trajetórias Secundárias",
+                    unsafe_allow_html=True
+                    )
         
         st.divider()
         
+        # =========================
+        # OPÇÕES DE VISUALIZAÇÃO
+        # =========================
+        col_opt1, col_opt2 = st.columns(2)
+        with col_opt1:
+            st.session_state.mostrar_nomes = st.checkbox("Exibir nomes das carteiras", value=st.session_state.mostrar_nomes, key="mostrar_nomes_cb")
+        with col_opt2:
+            st.session_state.mostrar_valores = st.checkbox("Exibir valores das transações", value=st.session_state.mostrar_valores, key="mostrar_valores_cb")
+
         # =========================
         # GRAFO INTERATIVO
         # =========================
@@ -462,7 +427,13 @@ def interface():
             G=etapa["grafo"],
             carteira_principal=wallet,
             scores=etapa["scores"],
-            caminho_destacado=etapa["caminho"]
+            trajetorias_destacadas=etapa.get("trajetorias"),
+            # Passa os dados extras para a função de renderização
+            possiveis_mixers=etapa.get("possiveis_mixers"),
+            carteiras_alto_risco=etapa.get("carteiras_alto_risco"),
+            # Passa as novas opções de visualização
+            mostrar_nomes_carteiras=st.session_state.mostrar_nomes,
+            mostrar_valores_transacoes=st.session_state.mostrar_valores
         )
 
         st.divider()
@@ -491,7 +462,7 @@ def interface():
                     'Densidade': f"{calcular_densidade(g):.3f}",
                     'Alto Risco': alto_risco,
                     'Médio Risco': medio_risco,
-                    'Tamanho Rota': len(h['caminho']) if h['caminho'] else 0
+                    'Tamanho Rota': len(h['trajetorias'][0]['caminho']) if h.get('trajetorias') else 0
                 })
             
             df_evolucao = pd.DataFrame(dados_evolucao)
@@ -596,6 +567,41 @@ def interface():
             with st.spinner("Inicializando o agente analítico..."):
                 st.session_state.agent = carregar_agent()
 
-        llm, prompt = st.session_state.agent
+        llm, retriever, prompt = st.session_state.agent
 
-        iniciarChat(llm, prompt)
+        # Exibe o histórico de mensagens
+        for msg in st.session_state.mensagens:
+            with st.chat_message(msg["role"]):
+                st.markdown(msg["content"])
+
+        # Captura o input do usuário
+        if pergunta := st.chat_input("Sua pergunta sobre as transações:"):
+            # Adiciona a pergunta do usuário ao histórico e à tela
+            st.session_state.mensagens.append({"role": "user", "content": pergunta})
+            with st.chat_message("user"):
+                st.markdown(pergunta)
+
+            # Gera e exibe a resposta da IA
+            with st.chat_message("assistant"):
+                placeholder = st.empty()
+                placeholder.markdown("🧠 Analisando dados...")
+                try:
+                    resposta = ag.responder(
+                        llm,
+                        retriever,
+                        prompt,
+                        pergunta
+                    )
+                    placeholder.markdown(resposta)
+                    st.session_state.mensagens.append({"role": "assistant", "content": resposta})
+                
+                except Exception as e:
+                    error_message = f"Ocorreu um erro: {e}"
+                    if "429" in str(e) or "Quota exceeded" in str(e):
+                        error_message = "🚨 Limite de requisições à API atingido. Por favor, aguarde um minuto antes de tentar novamente."
+                    
+                    placeholder.error(error_message)
+                    st.session_state.mensagens.append({"role": "assistant", "content": error_message})
+            
+            # Força a re-execução para limpar o campo de input e evitar reenvio
+            st.rerun()

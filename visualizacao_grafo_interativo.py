@@ -21,7 +21,11 @@ def renderizar_grafo_interativo(
         G,
         carteira_principal=None,
         scores=None,
-        caminho_destacado=None):
+        trajetorias_destacadas=None,
+        possiveis_mixers=None,
+        carteiras_alto_risco=None,
+        mostrar_nomes_carteiras=True,
+        mostrar_valores_transacoes=True):
 
     # -------------------------
     # Converte MultiDiGraph sem perder dados
@@ -41,8 +45,8 @@ def renderizar_grafo_interativo(
     # -------------------------
     # Limite de segurança visual
     # -------------------------
-    MAX_NOS = 200
-    MAX_ARESTAS = 1000
+    MAX_NOS = 600
+    MAX_ARESTAS = 600
 
     if G.number_of_nodes() > MAX_NOS:
         nos = list(G.nodes())[:MAX_NOS]
@@ -57,6 +61,19 @@ def renderizar_grafo_interativo(
     nodes = []
     edges = []
 
+    # Prepara conjuntos para busca rápida
+    mixer_wallets = {m['carteira'] for m in possiveis_mixers} if possiveis_mixers else set()
+    high_risk_wallets = {
+        r['carteira'] for r in carteiras_alto_risco 
+        if r.get('score', 0) >= 70
+    } if carteiras_alto_risco else set()
+
+    # Prepara nós e arestas das trajetórias
+    nodes_in_path = set()
+    if trajetorias_destacadas:
+        for traj in trajetorias_destacadas:
+            nodes_in_path.update(traj.get('caminho', []))
+
     # -------------------------
     # NÓS
     # -------------------------
@@ -64,33 +81,77 @@ def renderizar_grafo_interativo(
 
         score = scores.get(no, {}).get("score", 0) if scores else 0
 
-        tamanho = 35 if no == carteira_principal else 20
+        # Define propriedades visuais com base nos dados do dossiê
+        tamanho = 15
+        formato = "dot" # Círculo padrão
+        cor_no = corPorRiscoHex(score)
+        borda_largura = 1
+        borda_cor = "#888888" # Cinza padrão
+
+        if no == carteira_principal:
+            cor_no = "#006400"  # Verde escuro
+            tamanho = 35
+        elif no in mixer_wallets:
+            cor_no = "#8400FF"  # Roxo para mixers
+            tamanho = 25
+        elif no in high_risk_wallets:
+            cor_no = "#800000"  # Vinho
+            tamanho = 22
+        
+        if no in nodes_in_path:
+            borda_cor = "#0000FF" # Borda azul para nós em trajetórias
+            borda_largura = 3
+
+        # Define o label do nó
+        label_no = ""
+        if mostrar_nomes_carteiras:
+            if no == carteira_principal:
+                label_no = "Carteira Inicial"
+            else:
+                label_no = nomes[no]
 
         nodes.append(
             Node(
                 id=ids[no],
-                label=nomes[no],
+                label=label_no,
                 title=f"{no}\nScore={round(score, 2)}",
+                shape=formato,
                 size=tamanho,
-                color=corPorRiscoHex(score),
-
+                # A cor da borda deve ser passada dentro do objeto 'color'
+                color={
+                    "background": cor_no,
+                    "border": borda_cor,
+                    "highlight": {"border": "#FFD700", "background": cor_no},
+                    "hover": {"border": "#FFD700", "background": cor_no}
+                },
                 font={
                     "color": "#000000",
                     "face": "arial",
                     "size": 14,
                     "strokeWidth": 4,
                     "strokeColor": "#00FF55"
-                }
+                },
+                borderWidth=borda_largura
             )
         )
 
     # -------------------------
     # TRAJETÓRIA DESTACADA
     # -------------------------
-    arestas_caminho = set()
+    arestas_principais = set()
+    arestas_secundarias = set()
 
-    if caminho_destacado and len(caminho_destacado) >= 2:
-        arestas_caminho = set(zip(caminho_destacado, caminho_destacado[1:]))
+    if trajetorias_destacadas:
+        # A primeira trajetória é a principal
+        if len(trajetorias_destacadas) > 0:
+            caminho_principal = trajetorias_destacadas[0].get('caminho', [])
+            if len(caminho_principal) >= 2:
+                arestas_principais = set(zip(caminho_principal, caminho_principal[1:]))
+        
+        # As demais são secundárias
+        for traj in trajetorias_destacadas[1:]:
+            caminho_secundario = traj.get('caminho', [])
+            arestas_secundarias.update(zip(caminho_secundario, caminho_secundario[1:]))
 
     # -------------------------
     # ARESTAS
@@ -105,10 +166,15 @@ def renderizar_grafo_interativo(
 
         cor = "#888888"
         largura = 1
+        dashed = False
 
-        if (u, v) in arestas_caminho:
+        if (u, v) in arestas_principais:
             cor = "#0000FF"
             largura = 4
+        elif (u, v) in arestas_secundarias:
+            cor = "#4169E1" # Royal Blue
+            largura = 2
+            dashed = True
 
         valor = data.get("valor", 0)
 
@@ -117,10 +183,11 @@ def renderizar_grafo_interativo(
         txid = data.get("txid", "")
 
         label = ""
-        if valor != "" and txid != "":
-            label = f"{valor}\n{txid[:6]}..."
-        elif valor != "":
-            label = f"{valor}"
+        if mostrar_valores_transacoes:
+            if valor != "" and txid != "":
+                label = f"{valor}\n{txid[:6]}..."
+            elif valor != "":
+                label = f"{valor}"
 
         edges.append(
             Edge(
@@ -128,6 +195,7 @@ def renderizar_grafo_interativo(
                 target=ids[v],
                 color=cor,
                 width=largura,
+                dashes=dashed,
                 label=label
             )
         )

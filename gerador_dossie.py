@@ -3,10 +3,11 @@ import pandas as pd
 import analise_heuristica as ht
 import numpy as np
 
-def gerarDossieInvestigativo(G, carteira_inicial, scores, trajetorias=None, possiveis_mixers=None):
+def gerarDossieInvestigativo(G, carteira_inicial, scores, trajetorias=None, possiveis_mixers=None, coinjoin_suspeitas=None):
     
     trajetorias = trajetorias or []
     possiveis_mixers = possiveis_mixers or ht.detectarPossiveisMixers(G)
+    coinjoin_suspeitas = coinjoin_suspeitas or {}
 
     analise_comp = {
         "pico_transacoes_por_minuto": 0,
@@ -55,8 +56,10 @@ def gerarDossieInvestigativo(G, carteira_inicial, scores, trajetorias=None, poss
     closeness = ht.analisarCloseness(G) if G.number_of_nodes() > 0 else {}
     degree = ht.analisarDegree(G) if G.number_of_nodes() > 1 else {}
     clusters = ht.analisarClusters(G)
-    chains = ht.analisarChain(G)
     key_addresses = ht.detectarKeyAddresses(G) if G.number_of_nodes() > 0 else {}
+    
+    # Extrai os nós de cadeia diretamente do atributo do grafo
+    chains = [no for no, data in G.nodes(data=True) if data.get("chain_node", False)]
 
     vals = np.array([d["score"] for d in scores.values()])
 
@@ -77,6 +80,11 @@ def gerarDossieInvestigativo(G, carteira_inicial, scores, trajetorias=None, poss
         if dados["score"] >= threshold
     ]
 
+    transacoes_coinjoin = [
+        {"txid": txid, "motivo": dados["motivo"], "carteiras": dados["carteiras"]}
+        for txid, dados in coinjoin_suspeitas.items()
+    ]
+    
     return {
         "carteira_inicial": carteira_inicial,
         "resumo_grafo": {
@@ -86,6 +94,7 @@ def gerarDossieInvestigativo(G, carteira_inicial, scores, trajetorias=None, poss
         },
         "carteiras_alto_risco": carteiras_alto_risco[:10],
         "possiveis_mixers": possiveis_mixers,
+        "transacoes_coinjoin_suspeitas": transacoes_coinjoin,
         "trajetorias_provaveis": trajetorias,
         
         "analise_comportamental": analise_comp, 
@@ -108,7 +117,10 @@ def gerarDossieInvestigativo(G, carteira_inicial, scores, trajetorias=None, poss
             "Scores e mixers sao indicios heuristicos, nao prova conclusiva.",
             "Uma LLM investigadora deve usar este dossie para explicar hipoteses e incertezas.",
             "Nos com possivel mixer podem representar servicos legitimos, exchanges ou consolidadores.",
-            "A analise comportamental mapeia o uso potencial de scripts e automacoes pelo atacante."
+            "A analise comportamental mapeia o uso potencial de scripts e automacoes pelo atacante.",
+            "Transacoes em transacoes_coinjoin_suspeitas tem outputs de denominacao identica; "
+            "essas carteiras nao foram fundidas no clustering de common-input-ownership, mas "
+            "podem indicar coordenacao deliberada entre elas (ex.: consolidacao de pagamentos)."
         ]
     }
 
@@ -121,7 +133,8 @@ def imprimirDossieInvestigativo(dossie):
     print("Carteiras de alto risco:", len(dossie["carteiras_alto_risco"]))
     print("Possiveis mixers:", len(dossie["possiveis_mixers"]))
     print("Trajetorias provaveis:", len(dossie["trajetorias_provaveis"]))
-
+    print("Transacoes com suspeita de CoinJoin:", len(dossie["transacoes_coinjoin_suspeitas"]))
+    
     if dossie["possiveis_mixers"]:
         print("\nTop possiveis mixers:")
         for mixer in dossie["possiveis_mixers"][:5]:
@@ -130,6 +143,11 @@ def imprimirDossieInvestigativo(dossie):
                 f"- {mixer['carteira']} | score_mixer={mixer['score_mixer']} | "
                 f"motivos: {motivos}"
             )
+            
+    if dossie["transacoes_coinjoin_suspeitas"]:
+        print("\nTop transacoes suspeitas de CoinJoin:")
+        for tx in dossie["transacoes_coinjoin_suspeitas"][:5]:
+            print(f"- txid={tx['txid']} | motivo: {tx['motivo']} | carteiras: {len(tx['carteiras'])}")
 
 def salvarDossieInvestigativo(dossie, caminho="dossie_investigativo.json"):
     with open(caminho, "w", encoding="utf-8") as arquivo:
