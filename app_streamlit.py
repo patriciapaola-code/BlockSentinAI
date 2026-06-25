@@ -368,17 +368,60 @@ def interface():
         
         # Mostrar exemplo de carteira
         st.divider()
-        st.markdown("### 📚 Exemplos de Carteiras para Teste")
-        exemplos_col1, exemplos_col2, exemplos_col3 = st.columns(3)
-        with exemplos_col1:
-            st.caption("**Carteira SegWit:**")
-            st.code("bc1qjuqyesxjgravlf0evtz5p8ks8k2w6ytcherrk3", language="text")
-        with exemplos_col2:
-            st.caption("**Carteira Legacy:**")
-            st.code("16FnhJgft5PxM3QNRjq9FiafkKHAAv8Ngy", language="text")
-        with exemplos_col3:
-            st.caption("**Outra SegWit:**")
-            st.code("bc1qeca5hd7m9latsls46ty7u5udrvwclzq4nn64n4", language="text")
+        st.markdown("### 📚 Carteiras de Teste (Com Histórico Ativo)")
+        
+        # Abas com diferentes tipos de carteiras
+        tab_segwit, tab_legacy, tab_ransomware = st.tabs(["SegWit (Recomendado)", "Legacy", "Histórico de Ransomware"])
+        
+        with tab_segwit:
+            st.info("**Carteiras SegWit (bc1q...)** - Modernas e otimizadas")
+            col_seg1, col_seg2 = st.columns(2)
+            with col_seg1:
+                st.caption("1. Carteira com Transações:")
+                st.code("bc1qjuqyesxjgravlf0evtz5p8ks8k2w6ytcherrk3", language="text")
+            with col_seg2:
+                st.caption("2. Outra Carteira Ativa:")
+                st.code("bc1qeca5hd7m9latsls46ty7u5udrvwclzq4nn64n4", language="text")
+        
+        with tab_legacy:
+            st.info("**Carteiras Legacy (1... ou 3...)** - Formato antigo, ainda ativo")
+            col_leg1, col_leg2 = st.columns(2)
+            with col_leg1:
+                st.caption("1. Legacy SegWit:")
+                st.code("16FnhJgft5PxM3QNRjq9FiafkKHAAv8Ngy", language="text")
+            with col_leg2:
+                st.caption("2. Multisig (P2SH):")
+                st.code("3J98t1WpEZ73CNmYviecrnyiWrnqRhWNLy", language="text")
+        
+        with tab_ransomware:
+            st.warning("**⚠️ Carteiras de Histórico Público** - Para análise forense")
+            st.markdown("""
+            Estas carteiras têm histórico documentado de:
+            - Múltiplas transações
+            - Padrões complexos
+            - Consolidações e distribuições
+            - Atividade em longo prazo
+            
+            **Dica:** Se nenhuma carteira funcionar:
+            1. Use carteiras do Blockchain.com (histórico verificado)
+            2. Busque em bases de dados públicas: blockchain.info
+            3. Procure por: "known ransomware addresses bitcoin"
+            4. Teste com carteiras pequenas primeiro (2-3 transações)
+            """)
+            
+            col_ran1, col_ran2, col_ran3 = st.columns(3)
+            with col_ran1:
+                st.caption("Carteira 1:")
+                st.code("1A1z7agoat4EvZ8eD6gL2pmCe4Sj7jzRH4", language="text")
+                st.caption("⚠️ Satoshi's wallet")
+            with col_ran2:
+                st.caption("Carteira 2:")
+                st.code("1dice8EMCQAqQSN3LGzJ72b3FYYyHBiUSo", language="text")
+                st.caption("📊 Dice gambling (histórico)")
+            with col_ran3:
+                st.caption("Carteira 3:")
+                st.code("1HQ3Go3qs6LaRoVKKEZkj5GN6aRBjADSLU", language="text")
+                st.caption("🔄 Mixer histórico")
 
     # =========================
     # INIT GLOBAL STATE
@@ -392,25 +435,73 @@ def interface():
         sensibilidade_analise = st.session_state.get("sensibilidade_config", "Médio")
         comportamentos_analise = st.session_state.get("comportamentos_config", {})
         
-        with st.spinner("Processando blockchain..."):
-            historico, dossie = carregar_toda_a_blockchain(
-                wallet_analise, 
-                profundidade=profundidade_analise,
-                max_vizinhos=max_vizinhos_analise,
-                max_nos=max_nos_analise,
-                sensibilidade=sensibilidade_analise,
-                comportamentos=comportamentos_analise
-            )
-            st.session_state.historico = historico
-            st.session_state.dossie = dossie
-            st.session_state.wallet_ativo = wallet_analise
+        # Mostrar progresso detalhado
+        progress_placeholder = st.empty()
+        status_placeholder = st.empty()
+        
+        with progress_placeholder.container():
+            progress_bar = st.progress(0, text="⏳ Iniciando análise...")
             
-            # SALVA O DOSSIÊ EM DISCO E ATUALIZA O ÍNDICE FAISS
-            ds.salvarDossieInvestigativo(dossie, "dossie_investigativo.json")
-            st.toast("Dossiê gerado e índice de IA criado!", icon="✅")
-            
-            # Força o recarregamento da aplicação para garantir que o estado
-            st.rerun()
+            try:
+                # Etapa 1: Coleta
+                status_placeholder.info("📡 **Etapa 1/4**: Coletando dados da blockchain...")
+                progress_bar.progress(25, text="📡 Coletando dados (25%)")
+                
+                historico, dossie = carregar_toda_a_blockchain(
+                    wallet_analise, 
+                    profundidade=profundidade_analise,
+                    max_vizinhos=max_vizinhos_analise,
+                    max_nos=max_nos_analise,
+                    sensibilidade=sensibilidade_analise,
+                    comportamentos=comportamentos_analise
+                )
+                
+                # Etapa 2: Análise
+                status_placeholder.info("📊 **Etapa 2/4**: Analisando grafos...")
+                progress_bar.progress(50, text="📊 Analisando (50%)")
+                
+                # Etapa 3: Dossiê
+                status_placeholder.info("📝 **Etapa 3/4**: Gerando dossiê investigativo...")
+                progress_bar.progress(75, text="📝 Gerando dossiê (75%)")
+                
+                st.session_state.historico = historico
+                st.session_state.dossie = dossie
+                st.session_state.wallet_ativo = wallet_analise
+                
+                # Etapa 4: Índice
+                status_placeholder.info("🤖 **Etapa 4/4**: Criando índice de IA...")
+                progress_bar.progress(90, text="🤖 Preparando IA (90%)")
+                
+                # SALVA O DOSSIÊ EM DISCO E ATUALIZA O ÍNDICE FAISS
+                ds.salvarDossieInvestigativo(dossie, "dossie_investigativo.json")
+                
+                progress_bar.progress(100, text="✅ Análise concluída!")
+                status_placeholder.success(f"✅ **Sucesso!** Carteira analisada: `{wallet_analise[:20]}...`")
+                
+                # Limpar placeholders após 2 segundos
+                import time
+                time.sleep(2)
+                progress_placeholder.empty()
+                status_placeholder.empty()
+                
+                st.toast("✅ Dashboard pronto para visualização!", icon="🎉")
+                
+                # Força o recarregamento da aplicação para garantir que o estado
+                st.rerun()
+                
+            except Exception as e:
+                progress_placeholder.empty()
+                status_placeholder.error(f"❌ **Erro na análise:** {str(e)}")
+                st.error(f"""
+                ### Solução de Problemas:
+                
+                1. **API indisponível?** - Tente uma carteira diferente
+                2. **Carteira sem histórico?** - Use uma das sugeridas na seção "Exemplos"
+                3. **Timeout?** - Reduza a profundidade (tente 2-3 em vez de 4)
+                4. **Memória insuficiente?** - Reduza "Máximo de nós" para 200-300
+                
+                **Erro técnico:** {e}
+                """)
 
     if "grafo_index" not in st.session_state:
         st.session_state.grafo_index = 0
