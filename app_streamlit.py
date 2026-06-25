@@ -213,7 +213,7 @@ def interface():
     # =========================
     # PAINEL DE CONFIGURAÇÃO DO USUÁRIO (ENTRADA)
     # =========================
-    with st.expander("⚙️ Configuração da Investigação", expanded=True):
+    with st.expander("Análise de Carteira", expanded=True):
         st.markdown("### 📍 Endereço da Carteira e Parâmetros de Busca")
         
         col_wallet_1, col_wallet_2 = st.columns([3, 1])
