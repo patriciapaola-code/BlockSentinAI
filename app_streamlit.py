@@ -23,14 +23,15 @@ st.set_page_config(
 # 2. FUNÇÃO COM CACHE PARA PROCESSAMENTO PESADO DA BLOCKCHAIN
 # ==============================================================================
 @st.cache_resource(show_spinner=False)
-def carregar_toda_a_blockchain(wallet):
+def carregar_toda_a_blockchain(wallet, profundidade=4, max_vizinhos=100, max_nos=500, 
+                               sensibilidade="Médio", comportamentos=None):
     
     historico = []
     # =========================
     # 1. GRAFO BRUTO
     # =========================
-    G_bruto = cb.expandirGrafo(wallet, profundidade=4, 
-                                  max_vizinhos=100, max_nos=500, max_edges=600)
+    G_bruto = cb.expandirGrafo(wallet, profundidade=profundidade, 
+                                  max_vizinhos=max_vizinhos, max_nos=max_nos, max_edges=max_nos+100)
     score_bruto = ht.calcularScoreRisco(G_bruto, wallet)
     historico.append({
         "nome": "1. Grafo Bruto",
@@ -209,19 +210,169 @@ def interface():
 
     st.title("🕵️ Dashboard Interativo - Rastreamento de Ransomware")
 
-    wallet = "bc1qjuqyesxjgravlf0evtz5p8ks8k2w6ytcherrk3"
-    #wallet = "16FnhJgft5PxM3QNRjq9FiafkKHAAv8Ngy"
-    #wallet = "bc1qeca5hd7m9latsls46ty7u5udrvwclzq4nn64n4"
-
+    # =========================
+    # PAINEL DE CONFIGURAÇÃO DO USUÁRIO (ENTRADA)
+    # =========================
+    with st.expander("⚙️ Configuração da Investigação", expanded=True):
+        st.markdown("### 📍 Endereço da Carteira e Parâmetros de Busca")
+        
+        col_wallet_1, col_wallet_2 = st.columns([3, 1])
+        with col_wallet_1:
+            wallet_input = st.text_input(
+                "Endereço inicial da carteira:",
+                value="bc1qjuqyesxjgravlf0evtz5p8ks8k2w6ytcherrk3",
+                placeholder="Insira um endereço Bitcoin válido",
+                help="Ex: bc1q... (SegWit) ou 1... ou 3... (Legacy)"
+            )
+        with col_wallet_2:
+            if st.button("📋 Exemplo", help="Usar carteira de exemplo"):
+                st.session_state.wallet_example = "bc1qjuqyesxjgravlf0evtz5p8ks8k2w6ytcherrk3"
+        
+        wallet = wallet_input
+        
+        # Mostrar exemplo se selecionado
+        if "wallet_example" in st.session_state:
+            st.info(f"**Exemplo carregado:** {st.session_state.wallet_example}")
+        
+        # Parâmetros de busca
+        st.markdown("### 🔍 Profundidade e Escala da Busca")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            profundidade = st.slider(
+                "Profundidade máxima de busca:",
+                min_value=1, max_value=10, value=4,
+                help="Quantos níveis de transações explorar a partir da carteira inicial"
+            )
+        with col2:
+            max_vizinhos = st.slider(
+                "Máximo de vizinhos por nó:",
+                min_value=10, max_value=500, value=100, step=10,
+                help="Limita o número de nós vizinhos explorados"
+            )
+        with col3:
+            max_nos = st.slider(
+                "Número máximo de nós:",
+                min_value=50, max_value=2000, value=500, step=50,
+                help="Limite total de nós no grafo"
+            )
+        
+        # Filtros de transações
+        st.markdown("### 💰 Filtros de Transações")
+        col_val1, col_val2 = st.columns(2)
+        with col_val1:
+            valor_minimo = st.number_input(
+                "Valor mínimo das transações (BTC):",
+                min_value=0.0, value=0.1, step=0.1,
+                help="Filtrar transações abaixo deste valor"
+            )
+        with col_val2:
+            valor_maximo = st.number_input(
+                "Valor máximo das transações (BTC):",
+                min_value=0.0, value=1000.0, step=1.0,
+                help="Filtrar transações acima deste valor"
+            )
+        
+        # Intervalo de datas
+        st.markdown("### 📅 Intervalo Temporal")
+        col_data1, col_data2 = st.columns(2)
+        with col_data1:
+            data_inicio = st.date_input(
+                "Data de início:",
+                help="Filtrar transações a partir desta data"
+            )
+        with col_data2:
+            data_fim = st.date_input(
+                "Data de término:",
+                help="Filtrar transações até esta data"
+            )
+        
+        # Nível de sensibilidade
+        st.markdown("### ⚠️ Nível de Sensibilidade da Detecção de Risco")
+        sensibilidade = st.radio(
+            "Selecione o nível de sensibilidade:",
+            options=["Baixo", "Médio", "Alto"],
+            index=1,
+            horizontal=True,
+            help="Baixo: poucos alertas | Médio: equilibrado | Alto: máxima detecção"
+        )
+        
+        # Comportamentos suspeitos
+        st.markdown("### 🚨 Tipos de Comportamento Suspeito a Detectar")
+        col_comp1, col_comp2 = st.columns(2)
+        with col_comp1:
+            detectar_fan_in = st.checkbox("Fan-in elevado", value=True, 
+                                         help="Múltiplas entradas consolidadas em um nó")
+            detectar_fan_out = st.checkbox("Fan-out elevado", value=True,
+                                          help="Um nó distribuindo fundos para múltiplos destinos")
+            detectar_mixer = st.checkbox("Possível mixer", value=True,
+                                        help="Padrões indicativos de misturadores de moedas")
+        with col_comp2:
+            detectar_cadeia_rapida = st.checkbox("Transações em cadeia rápida", value=True,
+                                                help="Sequências lineares de transações")
+            detectar_fracionado = st.checkbox("Valores fracionados repetitivos", value=True,
+                                             help="Padrão de quebra de valores em múltiplas parcelas")
+        
+        st.divider()
+        
+        # Botão de execução
+        if st.button("🚀 Iniciar Análise Forense", type="primary", use_container_width=True):
+            st.session_state.config_pronto = True
+            st.session_state.wallet_config = wallet
+            st.session_state.profundidade_config = profundidade
+            st.session_state.max_vizinhos_config = max_vizinhos
+            st.session_state.max_nos_config = max_nos
+            st.session_state.valor_minimo_config = valor_minimo
+            st.session_state.valor_maximo_config = valor_maximo
+            st.session_state.data_inicio_config = data_inicio
+            st.session_state.data_fim_config = data_fim
+            st.session_state.sensibilidade_config = sensibilidade
+            st.session_state.comportamentos_config = {
+                "fan_in": detectar_fan_in,
+                "fan_out": detectar_fan_out,
+                "mixer": detectar_mixer,
+                "cadeia_rapida": detectar_cadeia_rapida,
+                "fracionado": detectar_fracionado
+            }
+            st.toast("✅ Configuração salva! Processando blockchain...", icon="⚙️")
+        
+        # Mostrar exemplo de carteira
+        st.divider()
+        st.markdown("### 📚 Exemplos de Carteiras para Teste")
+        exemplos_col1, exemplos_col2, exemplos_col3 = st.columns(3)
+        with exemplos_col1:
+            st.caption("**Carteira SegWit:**")
+            st.code("bc1qjuqyesxjgravlf0evtz5p8ks8k2w6ytcherrk3", language="text")
+        with exemplos_col2:
+            st.caption("**Carteira Legacy:**")
+            st.code("16FnhJgft5PxM3QNRjq9FiafkKHAAv8Ngy", language="text")
+        with exemplos_col3:
+            st.caption("**Outra SegWit:**")
+            st.code("bc1qeca5hd7m9latsls46ty7u5udrvwclzq4nn64n4", language="text")
 
     # =========================
     # INIT GLOBAL STATE
     # =========================
     if "historico" not in st.session_state:
+        # Usa parâmetros da configuração se disponível, senão usa defaults
+        wallet_analise = st.session_state.get("wallet_config", wallet)
+        profundidade_analise = st.session_state.get("profundidade_config", 4)
+        max_vizinhos_analise = st.session_state.get("max_vizinhos_config", 100)
+        max_nos_analise = st.session_state.get("max_nos_config", 500)
+        sensibilidade_analise = st.session_state.get("sensibilidade_config", "Médio")
+        comportamentos_analise = st.session_state.get("comportamentos_config", {})
+        
         with st.spinner("Processando blockchain..."):
-            historico, dossie = carregar_toda_a_blockchain(wallet)
+            historico, dossie = carregar_toda_a_blockchain(
+                wallet_analise, 
+                profundidade=profundidade_analise,
+                max_vizinhos=max_vizinhos_analise,
+                max_nos=max_nos_analise,
+                sensibilidade=sensibilidade_analise,
+                comportamentos=comportamentos_analise
+            )
             st.session_state.historico = historico
             st.session_state.dossie = dossie
+            st.session_state.wallet_ativo = wallet_analise
             
             # SALVA O DOSSIÊ EM DISCO E ATUALIZA O ÍNDICE FAISS
             ds.salvarDossieInvestigativo(dossie, "dossie_investigativo.json")
@@ -255,6 +406,47 @@ def interface():
         "📊 Fluxo de Grafos",
         "🔎 Assistente IA Forense"
     ])
+
+    # =========================
+    # RESUMO DE CONFIGURAÇÃO ATIVA
+    # =========================
+    with st.container():
+        col_info1, col_info2, col_info3, col_info4, col_info5 = st.columns(5)
+        with col_info1:
+            st.metric(
+                "📍 Carteira",
+                st.session_state.get("wallet_ativo", "")[:10] + "...",
+                help=st.session_state.get("wallet_ativo", "Desconhecida")
+            )
+        with col_info2:
+            st.metric(
+                "🔍 Profundidade",
+                st.session_state.get("profundidade_config", 4),
+                help="Níveis de busca"
+            )
+        with col_info3:
+            st.metric(
+                "📊 Máx. Nós",
+                st.session_state.get("max_nos_config", 500),
+                help="Limite de nós"
+            )
+        with col_info4:
+            sensib = st.session_state.get("sensibilidade_config", "Médio")
+            cor_sensib = "🟢" if sensib == "Baixo" else "🟡" if sensib == "Médio" else "🔴"
+            st.metric(
+                "⚠️ Sensibilidade",
+                f"{cor_sensib} {sensib}",
+                help="Nível de detecção de risco"
+            )
+        with col_info5:
+            comportamentos = st.session_state.get("comportamentos_config", {})
+            total_comportamentos = sum(1 for v in comportamentos.values() if v)
+            st.metric(
+                "🚨 Comportamentos",
+                f"{total_comportamentos}/5",
+                help="Tipos de suspeita detectados"
+            )
+        st.divider()
 
     # =========================
     # ABA 1 - GRAFOS (ATUALIZADA)
@@ -435,7 +627,7 @@ def interface():
         # =========================
         dg.renderizar_grafo_interativo(
             G=etapa["grafo"],
-            carteira_principal=wallet,
+            carteira_principal=st.session_state.get("wallet_ativo", "desconhecida"),
             scores=etapa["scores"],
             trajetorias_destacadas=etapa.get("trajetorias"),
             # Passa os dados extras para a função de renderização
