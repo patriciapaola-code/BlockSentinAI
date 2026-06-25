@@ -239,7 +239,7 @@ def mostrar_resumo_grafo_sidebar():
 
 def interface():
 
-    st.title("🕵️ Dashboard Interativo - Rastreamento de Ransomware")
+    st.title("🕵️ BlockSentinAI - Sistema Inteligente para Rastreamento e Investigação de Ransomware em Blockchain.")
 
     # =========================
     # PAINEL DE CONFIGURAÇÃO DO USUÁRIO (ENTRADA)
