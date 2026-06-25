@@ -253,13 +253,18 @@ def interface():
                 "Endereço inicial da carteira:",
                 value="bc1qjuqyesxjgravlf0evtz5p8ks8k2w6ytcherrk3",
                 placeholder="Insira um endereço Bitcoin válido",
-                help="Ex: bc1q... (SegWit) ou 1... ou 3... (Legacy)"
+                help="Ex: bc1q... (SegWit) ou 1... ou 3... (Legacy)",
+                key="wallet_input"
             )
         with col_wallet_2:
             if st.button("📋 Exemplo", help="Usar carteira de exemplo"):
-                st.session_state.wallet_example = "bc1qjuqyesxjgravlf0evtz5p8ks8k2w6ytcherrk3"
+                exemplo = "bc1qjuqyesxjgravlf0evtz5p8ks8k2w6ytcherrk3"
+                st.session_state.wallet_example = exemplo
+                # Preenche o campo de input com o exemplo e força rerun para atualizar a UI
+                st.session_state["wallet_input"] = exemplo
+                st.experimental_rerun()
         
-        wallet = wallet_input
+        wallet = st.session_state.get("wallet_input", wallet_input)
         
         # Mostrar exemplo se selecionado
         if "wallet_example" in st.session_state:
