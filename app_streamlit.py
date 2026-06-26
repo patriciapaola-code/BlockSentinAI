@@ -244,29 +244,32 @@ def interface():
     # =========================
     # PAINEL DE CONFIGURAÇÃO DO USUÁRIO (ENTRADA)
     # =========================
+
+    # Inicializa valor padrão da carteira na sessão, se necessário
+    if "wallet_input" not in st.session_state:
+        st.session_state["wallet_input"] = "bc1qjuqyesxjgravlf0evtz5p8ks8k2w6ytcherrk3"
+
     with st.expander("Análise de Carteira", expanded=True):
         st.markdown("### 📍 Endereço da Carteira e Parâmetros de Busca")
         
         col_wallet_1, col_wallet_2 = st.columns([3, 1])
         with col_wallet_1:
+            # Usa o valor do session_state como value para garantir consistência
             wallet_input = st.text_input(
                 "Endereço inicial da carteira:",
-                value="bc1qjuqyesxjgravlf0evtz5p8ks8k2w6ytcherrk3",
+                value=st.session_state.get("wallet_input", "bc1qjuqyesxjgravlf0evtz5p8ks8k2w6ytcherrk3"),
                 placeholder="Insira um endereço Bitcoin válido",
                 help="Ex: bc1q... (SegWit) ou 1... ou 3... (Legacy)",
                 key="wallet_input"
             )
         with col_wallet_2:
-           # Inicializa o estado uma única vez
-        if "wallet_input" not in st.session_state:
-            st.session_state.wallet_input = ""
+            if st.button("📋 Exemplo", help="Usar carteira de exemplo"):
+                exemplo = "bc1qjuqyesxjgravlf0evtz5p8ks8k2w6ytcherrk3"
+                # Atualiza o session_state e força rerun para refletir no input
+                st.session_state.update({"wallet_input": exemplo, "wallet_example": exemplo})
+                st.experimental_rerun()
 
-        if st.button("📋 Exemplo", help="Usar carteira de exemplo"):
-            exemplo = "bc1qjuqyesxjgravlf0evtz5p8ks8k2w6ytcherrk3"
-            st.session_state.wallet_input = exemplo
-            st.session_state.wallet_example = exemplo
-
-        wallet = st.session_state.wallet_input
+        wallet = st.session_state.get("wallet_input", wallet_input)
         
         # Mostrar exemplo se selecionado
         if "wallet_example" in st.session_state:
