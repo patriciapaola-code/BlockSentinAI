@@ -248,6 +248,8 @@ def interface():
     # Inicializa valor padrão da carteira na sessão, se necessário
     if "wallet_input" not in st.session_state:
         st.session_state["wallet_input"] = "bc1qjuqyesxjgravlf0evtz5p8ks8k2w6ytcherrk3"
+    if "executar_analise" not in st.session_state:
+        st.session_state["executar_analise"] = False
 
     with st.expander("Análise de Carteira", expanded=True):
         st.markdown("### 📍 Endereço da Carteira e Parâmetros de Busca")
@@ -357,7 +359,6 @@ def interface():
         
         # Botão de execução
         if st.button("🚀 Iniciar Análise Forense", type="primary", use_container_width=True):
-            st.session_state.config_pronto = True
             st.session_state.wallet_config = wallet
             st.session_state.profundidade_config = profundidade
             st.session_state.max_vizinhos_config = max_vizinhos
@@ -374,7 +375,12 @@ def interface():
                 "cadeia_rapida": detectar_cadeia_rapida,
                 "fracionado": detectar_fracionado
             }
+            st.session_state.executar_analise = True
+            if "historico" in st.session_state:
+                del st.session_state["historico"]
+            st.session_state.grafo_index = 0
             st.toast("✅ Configuração salva! Processando blockchain...", icon="⚙️")
+            st.rerun()
         
         # Mostrar exemplo de carteira
         st.divider()
@@ -436,7 +442,7 @@ def interface():
     # =========================
     # INIT GLOBAL STATE
     # =========================
-    if "historico" not in st.session_state:
+    if st.session_state.get("executar_analise", False) and "historico" not in st.session_state:
         # Usa parâmetros da configuração se disponível, senão usa defaults
         wallet_analise = st.session_state.get("wallet_config", wallet)
         profundidade_analise = st.session_state.get("profundidade_config", 4)
@@ -530,6 +536,13 @@ def interface():
         st.session_state.mostrar_nomes = True
     if "mostrar_valores" not in st.session_state:
         st.session_state.mostrar_valores = True
+
+    if "historico" not in st.session_state:
+        st.info(
+            "🔎 Insira o endereço da carteira e clique em **🚀 Iniciar Análise Forense**. "
+            "A interface de grafos e o dossiê serão exibidos após o processamento."
+        )
+        return
 
     # =========================
     # TABS

@@ -21,7 +21,7 @@
       ]
     },
     {
-      "carteira": "bc1qmj9crqc254g3melgzgqvy3c80zv9cq3sv370mq",
+      "carteira": "bc1q2fud7dsq72pa2d6v8acnkcw9hp7vx67una6fq6",
       "score": 85.99,
       "risco": "ALTO",
       "motivos": [
@@ -119,6 +119,21 @@
   ],
   "possiveis_mixers": [
     {
+      "carteira": "bc1q9z8ctthxwf8rd7tp9vtzqxgy7ucm0juq4mk6rd",
+      "score_mixer": 100.0,
+      "motivos": [
+        "fan-in 5 / fan-out 9",
+        "hub com fluxo bidirecional",
+        "transacao com 2 inputs e 2 outputs"
+      ],
+      "txids": [
+        "08cd0efb48ced2aa51a071ba7c5505b13b6a8169a0439e3fa3f8b4033196102e",
+        "c1e32882718de3675e67528d1bde296505c617bf020575d86dc125b33a9f6f36",
+        "d459a18dc956428002308524dcc32328be8aa2005b065a04a0be11d3992ab3d5",
+        "e3835b706c35646549069b1f81dfc31b47d24afba855bc03ab902b47ebf11945"
+      ]
+    },
+    {
       "carteira": "bc1qjuqyesxjgravlf0evtz5p8ks8k2w6ytcherrk3",
       "score_mixer": 100.0,
       "motivos": [
@@ -137,21 +152,6 @@
       ]
     },
     {
-      "carteira": "bc1q9z8ctthxwf8rd7tp9vtzqxgy7ucm0juq4mk6rd",
-      "score_mixer": 100.0,
-      "motivos": [
-        "fan-in 5 / fan-out 9",
-        "hub com fluxo bidirecional",
-        "transacao com 2 inputs e 2 outputs"
-      ],
-      "txids": [
-        "08cd0efb48ced2aa51a071ba7c5505b13b6a8169a0439e3fa3f8b4033196102e",
-        "c1e32882718de3675e67528d1bde296505c617bf020575d86dc125b33a9f6f36",
-        "d459a18dc956428002308524dcc32328be8aa2005b065a04a0be11d3992ab3d5",
-        "e3835b706c35646549069b1f81dfc31b47d24afba855bc03ab902b47ebf11945"
-      ]
-    },
-    {
       "carteira": "bc1qnzh65xk47mdweucqa2v03uxh83700qus2mgdut",
       "score_mixer": 100.0,
       "motivos": [
@@ -167,7 +167,7 @@
       ]
     },
     {
-      "carteira": "bc1qmj9crqc254g3melgzgqvy3c80zv9cq3sv370mq",
+      "carteira": "bc1q2fud7dsq72pa2d6v8acnkcw9hp7vx67una6fq6",
       "score_mixer": 100.0,
       "motivos": [
         "alta variacao de valores",
@@ -205,6 +205,28 @@
       ]
     },
     {
+      "carteira": "bc1qe2pnq85g9wpnkmfxyepay0eqxqva6n2fr9drhr",
+      "score_mixer": 100.0,
+      "motivos": [
+        "alta variacao de valores",
+        "transacao com 2 inputs e 75 outputs"
+      ],
+      "txids": [
+        "e2b914de586ff35abcb5e3ce3500234afae989c8b2c827f9bed2b42e7834c9c2"
+      ]
+    },
+    {
+      "carteira": "bc1qm2frkzzy0xgdhmd7ptl8h3w4l78w8jk3syhtxa",
+      "score_mixer": 100.0,
+      "motivos": [
+        "alta variacao de valores",
+        "transacao com 2 inputs e 75 outputs"
+      ],
+      "txids": [
+        "e2b914de586ff35abcb5e3ce3500234afae989c8b2c827f9bed2b42e7834c9c2"
+      ]
+    },
+    {
       "carteira": "bc1qxgpjrqvkuxzx437jzkex5uehev9favh9lsyh9g",
       "score_mixer": 100.0,
       "motivos": [
@@ -216,7 +238,7 @@
       ]
     },
     {
-      "carteira": "bc1q02efn3uxes0xv264wz8w7rqsur8kwjgrjs58pm",
+      "carteira": "bc1qhhlesxe5nqj0rp2u95rt7thhs9rzhlcy4rlasf",
       "score_mixer": 100.0,
       "motivos": [
         "alta variacao de valores",
@@ -227,33 +249,10 @@
       ]
     },
     {
-      "carteira": "bc1q9tt777f0nv6ffuk6m45h9nk0c4lcqju5r0hhpw",
+      "carteira": "bc1qphh0ezutucn2nvs9av8j99cd6evhtgfuf2j4pu",
       "score_mixer": 100.0,
       "motivos": [
         "alta variacao de valores",
-        "transacao com 2 inputs e 75 outputs"
-      ],
-      "txids": [
-        "e2b914de586ff35abcb5e3ce3500234afae989c8b2c827f9bed2b42e7834c9c2"
-      ]
-    },
-    {
-      "carteira": "bc1qvkw3s8daxayavtuj0p84g52k3a0cc3mme846sr",
-      "score_mixer": 100.0,
-      "motivos": [
-        "alta variacao de valores",
-        "transacao com 2 inputs e 75 outputs"
-      ],
-      "txids": [
-        "e2b914de586ff35abcb5e3ce3500234afae989c8b2c827f9bed2b42e7834c9c2"
-      ]
-    },
-    {
-      "carteira": "bc1qlf9n8vgqwtl573dcc300hcqkzw2dptl74p2vtn",
-      "score_mixer": 100.0,
-      "motivos": [
-        "alta variacao de valores",
-        "fan-in 0 / fan-out 75",
         "transacao com 2 inputs e 75 outputs"
       ],
       "txids": [
@@ -274,11 +273,11 @@
   ],
   "trajetorias_provaveis": [
     {
-      "destino": "bc1qmj9crqc254g3melgzgqvy3c80zv9cq3sv370mq",
+      "destino": "bc1q2fud7dsq72pa2d6v8acnkcw9hp7vx67una6fq6",
       "caminho": [
         "bc1qjuqyesxjgravlf0evtz5p8ks8k2w6ytcherrk3",
         "bc1qskjm9chwcgw02kfqzs9dn772zlvprdmgtrkj4m",
-        "bc1qmj9crqc254g3melgzgqvy3c80zv9cq3sv370mq"
+        "bc1q2fud7dsq72pa2d6v8acnkcw9hp7vx67una6fq6"
       ],
       "score_final": 84.47,
       "tamanho_caminho": 3
@@ -337,7 +336,7 @@
         "valor": 6.0
       },
       {
-        "carteira": "bc1qmj9crqc254g3melgzgqvy3c80zv9cq3sv370mq",
+        "carteira": "bc1q2fud7dsq72pa2d6v8acnkcw9hp7vx67una6fq6",
         "valor": 6.0
       },
       {
@@ -355,7 +354,7 @@
         "valor": 98.0
       },
       {
-        "carteira": "bc1qmj9crqc254g3melgzgqvy3c80zv9cq3sv370mq",
+        "carteira": "bc1q2fud7dsq72pa2d6v8acnkcw9hp7vx67una6fq6",
         "valor": 88.0
       },
       {
@@ -389,7 +388,7 @@
     ],
     "pagerank": [
       {
-        "carteira": "bc1qmj9crqc254g3melgzgqvy3c80zv9cq3sv370mq",
+        "carteira": "bc1q2fud7dsq72pa2d6v8acnkcw9hp7vx67una6fq6",
         "valor": 0.0149
       },
       {
@@ -431,7 +430,7 @@
     ],
     "betweenness": [
       {
-        "carteira": "bc1qmj9crqc254g3melgzgqvy3c80zv9cq3sv370mq",
+        "carteira": "bc1q2fud7dsq72pa2d6v8acnkcw9hp7vx67una6fq6",
         "valor": 0.0239
       },
       {
@@ -485,7 +484,7 @@
         "valor": 0.0312
       },
       {
-        "carteira": "bc1qmj9crqc254g3melgzgqvy3c80zv9cq3sv370mq",
+        "carteira": "bc1q2fud7dsq72pa2d6v8acnkcw9hp7vx67una6fq6",
         "valor": 0.0304
       },
       {
@@ -519,7 +518,7 @@
         "valor": 0.3333
       },
       {
-        "carteira": "bc1qmj9crqc254g3melgzgqvy3c80zv9cq3sv370mq",
+        "carteira": "bc1q2fud7dsq72pa2d6v8acnkcw9hp7vx67una6fq6",
         "valor": 0.3165
       },
       {
@@ -557,7 +556,7 @@
     ],
     "key_addresses": [
       {
-        "carteira": "bc1qmj9crqc254g3melgzgqvy3c80zv9cq3sv370mq",
+        "carteira": "bc1q2fud7dsq72pa2d6v8acnkcw9hp7vx67una6fq6",
         "valor": 0.0149
       },
       {
