@@ -641,31 +641,25 @@ def interface():
     # ABA 1 - GRAFOS (ATUALIZADA)
     # =========================
     with tab_grafos:
-
-        if not historico:
-             st.warning("### 🔍 Investigação Inconclusiva")
-             st.markdown("""
-             Não foi possível obter dados transacionais suficientes para este endereço. Isso ocorre geralmente por um dos seguintes motivos:
-             * **Tipo de Endereço:** Endereços P2SH (Multi-Sig) complexos podem não ser totalmente indexados por APIs de consulta rápida.
-             * **Inatividade:** A carteira não possui transações registradas no histórico recente rastreável.
-             * **Privacidade:** A carteira utiliza protocolos de ocultação de identidade que impedem a vinculação inicial do grafo.
+    historico = st.session_state.get("historico", [])
     
-             **Sugestão:** Tente um endereço de entrada (Input) conhecido ou uma carteira com histórico de transações confirmadas.
-             """)
-             return
+    if not historico:
+        # AQUI É O LUGAR DO AVISO MELHORADO
+        st.warning("### 🔍 Investigação Inconclusiva")
+        st.markdown("""
+        Não foi possível obter dados transacionais suficientes para este endereço. 
+        Isso ocorre devido a restrições técnicas na indexação de carteiras (como endereços P2SH complexos) 
+        ou falta de histórico ativo na rede.
+        """)
+        return # Encerra a renderização desta aba graciosamente
+    
+    # Restante do código segue normalmente apenas se historico existir
+    index = st.session_state.get("grafo_index", 0)
+    index = max(0, min(index, len(historico) - 1))
+    st.session_state.grafo_index = index
 
+    etapa = historico[index]
 
-
-       #istorico = st.session_state.get("historico", [])
-       #if not historico:
-           #st.info("Ainda não há histórico para exibir.")
-           #st.stop()
-
-       #index = st.session_state.get("grafo_index", 0)
-       #index = max(0, min(index, len(historico) - 1))
-       #st.session_state.grafo_index = index
-
-      # etapa = historico[index]
 
         # =========================
         # MÉTRICAS DE REDUÇÃO (ADICIONE AQUI)
