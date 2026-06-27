@@ -53,23 +53,34 @@ st.markdown("""
 # ==============================================================================
 # 2. FUNÇÃO COM CACHE PARA PROCESSAMENTO PESADO DA BLOCKCHAIN
 # ==============================================================================
+def is_grafo_valido(G): # Verifica se o grafo é válido (não nulo e com nós)
+    return G is not None and G.number_of_nodes() > 0
+
 @st.cache_resource(show_spinner=False)
-def carregar_toda_a_blockchain(wallet, profundidade=4, max_vizinhos=100, max_nos=500, 
-                               sensibilidade="Médio", comportamentos=None):
-    
+def carregar_toda_a_blockchain(wallet, ...):
     historico = []
-    # =========================
-    # 1. GRAFO BRUTO
-    # =========================
-    G_bruto = cb.expandirGrafo(wallet, profundidade=profundidade, 
-                                  max_vizinhos=max_vizinhos, max_nos=max_nos, max_edges=600)
+    
+    # 1. GRAFO BRUTO (Ponto de falha crítico)
+    G_bruto = cb.expandirGrafo(wallet, ...)
+    
+    if not is_grafo_valido(G_bruto):
+        return [], {"error": "Nenhum dado transacional encontrado para esta carteira."}
+
+    # Agora o cálculo é seguro
     score_bruto = ht.calcularScoreRisco(G_bruto, wallet)
-    historico.append({
-        "nome": "1. Grafo Bruto",
-        "grafo": G_bruto,
-        "scores": score_bruto,
-        "trajetorias": []
-    })
+    historico.append({...})
+    
+    # =========================
+    # FLUXO SEGURO PARA AS PRÓXIMAS ETAPAS
+    # =========================
+    G_atual = G_bruto
+    
+    # Exemplo: Aplicando heurísticas com verificação
+    heuristicas = [
+        ("Multi-Input", ht.heuristicaMultiInput, cb.construirGrafoFiltrado),
+        ("Valores", None, ht.aplicarValores),
+        ("Tempo", None, ht.aplicarTempo)
+    ]
     
     # =========================
     # 2. MULTI INPUT (Agrupa donos)
