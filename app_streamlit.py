@@ -665,7 +665,8 @@ def interface():
         st.session_state.grafo_index = index_seguro
 
         # 4. Agora é totalmente seguro acessar a lista
-        etapa = historico[index_seguro]
+        index = index_seguro
+        etapa = historico[index]
         
         # --- A partir daqui, você pode continuar renderizando o seu Grafo ---
         st.write(f"Visualizando: {etapa['nome']}")
@@ -719,8 +720,7 @@ def interface():
         with st.expander("🔄 Pipeline de Transformação", expanded=False):
             # Barra de progresso horizontal
             etapa_nomes = [h['nome'] for h in historico]
-            etapa_atual_idx = index
-            
+            etapa_atual_idx = index_seguro 
             # Mostra etapas como badges
             cols = st.columns(len(etapa_nomes))
             for i, (col, nome) in enumerate(zip(cols, etapa_nomes)):
@@ -732,7 +732,7 @@ def interface():
                     else:
                         st.text(f"⬜ {nome.split('.')[1].strip()}")
             
-            st.progress((index + 1) / len(historico))
+            st.progress((index_seguro + 1) / len(historico))
 
         # =========================
         # NAVEGAÇÃO
