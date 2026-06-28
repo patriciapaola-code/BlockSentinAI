@@ -71,7 +71,7 @@ def carregar_toda_a_blockchain(wallet, profundidade=4, max_vizinhos=100, max_nos
     G_bruto = cb.expandirGrafo(wallet, profundidade=profundidade, 
                                 max_vizinhos=max_vizinhos, max_nos=max_nos, max_edges=600)
 
-    # --- INSERIR AQUI: LOGO ABAIXO DA LINHA DO G_bruto ---
+
     # Verifica se o grafo existe e se ele tem pelo menos um nó
     if G_bruto is None or (hasattr(G_bruto, 'number_of_nodes') and G_bruto.number_of_nodes() == 0):
         # Isso impede que o código continue e tente calcular scores em um grafo vazio
@@ -640,26 +640,55 @@ def interface():
     # =========================
     # ABA 1 - GRAFOS (ATUALIZADA)
     # =========================
-    with tab_grafos:
+   """with tab_grafos:
         historico = st.session_state.get("historico", [])
     
         if not historico:
             # AQUI É O LUGAR DO AVISO MELHORADO
             st.warning("### 🔍 Investigação Inconclusiva")
             st.markdown("""
-            Não foi possível obter dados transacionais suficientes para este endereço. 
+          """Não foi possível obter dados transacionais suficientes para este endereço. 
             Isso ocorre devido a restrições técnicas na indexação de carteiras (como endereços P2SH complexos) 
             ou falta de histórico ativo na rede.
-            """)
-        # Encerra a renderização desta aba graciosamente
+            """)"""
+        # Encerra a renderização desta aba de forma eficiente
     
         # Restante do código segue normalmente apenas se historico existir
         index = st.session_state.get("grafo_index", 0)
         index = max(0, min(index, len(historico) - 1))
         st.session_state.grafo_index = index_seguro
 
-        etapa = historico[index_seguro]
+        etapa = historico[index_seguro]"""
 
+        with tab_grafos:
+        historico = st.session_state.get("historico", [])
+        
+        # 1. Verifica se a lista existe antes de qualquer coisa
+        if not historico:
+            st.warning("### 🔍 Investigação Inconclusiva")
+            st.markdown("""
+            Não foi possível obter dados transacionais suficientes para este endereço. 
+            Isso ocorre devido a restrições técnicas na indexação de carteiras ou 
+            falta de histórico ativo na rede.
+            """)
+            return  # Encerra esta aba graciosamente
+        
+        # 2. Calcula o índice seguro para evitar o erro 'out of range'
+        # Pega o índice atual salvo, ou começa em 0
+        index_atual = st.session_state.get("grafo_index", 0)
+        
+        # O 'min' garante que nunca buscaremos um índice maior que o último item da lista
+        index_seguro = max(0, min(index_atual, len(historico) - 1))
+        
+        # 3. Atualiza o session_state com o índice validado
+        st.session_state.grafo_index = index_seguro
+
+        # 4. Agora é totalmente seguro acessar a lista
+        etapa = historico[index_seguro]
+        
+        # --- A partir daqui, você pode continuar renderizando o seu Grafo ---
+        st.write(f"Visualizando: {etapa['nome']}")
+        # (seu código de exibição do grafo aqui)
 
         # =========================
         # MÉTRICAS DE REDUÇÃO (ADICIONE AQUI)
