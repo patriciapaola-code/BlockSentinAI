@@ -640,25 +640,6 @@ def interface():
     # =========================
     # ABA 1 - GRAFOS (ATUALIZADA)
     # =========================
-   """with tab_grafos:
-        historico = st.session_state.get("historico", [])
-    
-        if not historico:
-            # AQUI É O LUGAR DO AVISO MELHORADO
-            st.warning("### 🔍 Investigação Inconclusiva")
-            st.markdown("""
-          """Não foi possível obter dados transacionais suficientes para este endereço. 
-            Isso ocorre devido a restrições técnicas na indexação de carteiras (como endereços P2SH complexos) 
-            ou falta de histórico ativo na rede.
-            """)"""
-        # Encerra a renderização desta aba de forma eficiente
-    
-        # Restante do código segue normalmente apenas se historico existir
-        index = st.session_state.get("grafo_index", 0)
-        index = max(0, min(index, len(historico) - 1))
-        st.session_state.grafo_index = index_seguro
-
-        etapa = historico[index_seguro]"""
 
     with tab_grafos:
         historico = st.session_state.get("historico", [])
