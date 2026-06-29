@@ -663,29 +663,96 @@ def interface():
         
         # --- A partir daqui, você pode continuar renderizando o seu Grafo ---
         # =========================
-        # NAVEGAÇÃO NO TOPO (evita scroll para trocar de etapa)
+        # 1. TÍTULO NO TOPO
         # =========================
-        col_nav1, col_nav_label, col_nav2 = st.columns([1, 5, 1])
-        with col_nav1:
-            if st.button("⬅️ Anterior", key="prev", disabled=(index == 0)):
-                st.session_state.mostrar_nomes = True
-                st.session_state.mostrar_valores = True
-                st.session_state.grafo_index -= 1
-                st.rerun()
-        with col_nav_label:
-            st.markdown(
-                f"<h3 style='text-align:center; margin:0; padding:4px 0;'>{etapa['nome']}</h3>",
-                unsafe_allow_html=True
-            )
-        with col_nav2:
-            if st.button("Próxima ➡️", key="next", disabled=(index == len(historico) - 1)):
-                st.session_state.mostrar_nomes = True
-                st.session_state.mostrar_valores = True
-                st.session_state.grafo_index += 1
-                st.rerun()
+        st.markdown(
+            f"<h3 style='text-align:center; margin:0; padding:4px 0;'>🌐 {etapa['nome']}</h3>",
+            unsafe_allow_html=True
+        )
 
         # =========================
-        # MÉTRICAS ESPECÍFICAS DA ETAPA (acima do grafo)
+        # 2. MÉTRICAS DE REDUÇÃO DO GRAFO
+        # =========================
+        with st.expander("📊 Métricas de Redução do Grafo", expanded=False):
+            col1, col2, col3 = st.columns(3)
+
+            grafo_inicial = historico[0]['grafo']
+            nos_iniciais = grafo_inicial.number_of_nodes()
+            arestas_iniciais = grafo_inicial.number_of_edges()
+
+            grafo_atual = etapa['grafo']
+            nos_atuais = grafo_atual.number_of_nodes()
+            arestas_atuais = grafo_atual.number_of_edges()
+
+            with col1:
+                reducao_nos = ((nos_iniciais - nos_atuais) / nos_iniciais) * 100
+                st.metric(
+                    label="Nós",
+                    value=f"{nos_atuais}",
+                    delta=f"-{reducao_nos:.1f}% ({nos_iniciais - nos_atuais} removidos)"
+                )
+
+            with col2:
+                reducao_arestas = ((arestas_iniciais - arestas_atuais) / arestas_iniciais) * 100
+                st.metric(
+                    label="Arestas",
+                    value=f"{arestas_atuais}",
+                    delta=f"-{reducao_arestas:.1f}% ({arestas_iniciais - arestas_atuais} removidas)"
+                )
+
+            with col3:
+                densidade_inicial = nx.density(grafo_inicial.to_undirected())
+                densidade_atual = nx.density(grafo_atual.to_undirected())
+                variacao_densidade = ((densidade_atual - densidade_inicial) / densidade_inicial) * 100 if densidade_inicial > 0 else 0
+
+                st.metric(
+                    label="Densidade",
+                    value=f"{densidade_atual:.4f}",
+                    delta=f"{variacao_densidade:+.1f}%"
+                )
+
+        # =========================
+        # 3. PIPELINE DE TRANSFORMAÇÃO (com navegação embutida)
+        # =========================
+        with st.expander("🔄 Pipeline de Transformação", expanded=False):
+            # Navegação anterior/próxima
+            col_nav1, col_nav_label, col_nav2 = st.columns([1, 5, 1])
+            with col_nav1:
+                if st.button("⬅️ Anterior", key="prev", disabled=(index == 0)):
+                    st.session_state.mostrar_nomes = True
+                    st.session_state.mostrar_valores = True
+                    st.session_state.grafo_index -= 1
+                    st.rerun()
+            with col_nav_label:
+                st.markdown(
+                    f"<div style='text-align:center; font-weight:bold; padding-top:4px;'>Etapa {index + 1} de {len(historico)}</div>",
+                    unsafe_allow_html=True
+                )
+            with col_nav2:
+                if st.button("Próxima ➡️", key="next", disabled=(index == len(historico) - 1)):
+                    st.session_state.mostrar_nomes = True
+                    st.session_state.mostrar_valores = True
+                    st.session_state.grafo_index += 1
+                    st.rerun()
+
+            st.divider()
+
+            etapa_nomes = [h['nome'] for h in historico]
+            etapa_atual_idx = index_seguro
+            cols = st.columns(len(etapa_nomes))
+            for i, (col, nome) in enumerate(zip(cols, etapa_nomes)):
+                with col:
+                    if i < etapa_atual_idx:
+                        st.success(f"✅ {nome.split('.')[1].strip()}")
+                    elif i == etapa_atual_idx:
+                        st.info(f"🔵 {nome.split('.')[1].strip()}")
+                    else:
+                        st.text(f"⬜ {nome.split('.')[1].strip()}")
+
+            st.progress((index_seguro + 1) / len(historico))
+
+        # =========================
+        # 4. CARACTERÍSTICAS DO GRAFO (métricas e checkboxes de exibição)
         # =========================
         col1, col2, col3, col4 = st.columns(4)
         with col1:
@@ -702,9 +769,6 @@ def interface():
             else:
                 st.metric("Tamanho da Rota Principal", "N/A")
 
-        # =========================
-        # OPÇÕES DE VISUALIZAÇÃO (antes do grafo)
-        # =========================
         col_opt1, col_opt2 = st.columns(2)
         with col_opt1:
             st.session_state.mostrar_nomes = st.checkbox(
@@ -720,7 +784,7 @@ def interface():
             )
 
         # =========================
-        # GRAFO INTERATIVO + LEGENDA LATERAL (renderizado uma única vez)
+        # 5. EXIBIÇÃO DO GRAFO (grafo interativo + legenda)
         # =========================
         col_grafo, col_legenda = st.columns([5, 1])
 
@@ -775,66 +839,7 @@ def interface():
         st.divider()
 
         # =========================
-        # MÉTRICAS DE REDUÇÃO (expander abaixo do grafo)
-        # =========================
-        with st.expander("📊 Métricas de Redução do Grafo", expanded=False):
-            col1, col2, col3 = st.columns(3)
-
-            grafo_inicial = historico[0]['grafo']
-            nos_iniciais = grafo_inicial.number_of_nodes()
-            arestas_iniciais = grafo_inicial.number_of_edges()
-
-            grafo_atual = etapa['grafo']
-            nos_atuais = grafo_atual.number_of_nodes()
-            arestas_atuais = grafo_atual.number_of_edges()
-
-            with col1:
-                reducao_nos = ((nos_iniciais - nos_atuais) / nos_iniciais) * 100
-                st.metric(
-                    label="Nós",
-                    value=f"{nos_atuais}",
-                    delta=f"-{reducao_nos:.1f}% ({nos_iniciais - nos_atuais} removidos)"
-                )
-
-            with col2:
-                reducao_arestas = ((arestas_iniciais - arestas_atuais) / arestas_iniciais) * 100
-                st.metric(
-                    label="Arestas",
-                    value=f"{arestas_atuais}",
-                    delta=f"-{reducao_arestas:.1f}% ({arestas_iniciais - arestas_atuais} removidas)"
-                )
-
-            with col3:
-                densidade_inicial = nx.density(grafo_inicial.to_undirected())
-                densidade_atual = nx.density(grafo_atual.to_undirected())
-                variacao_densidade = ((densidade_atual - densidade_inicial) / densidade_inicial) * 100 if densidade_inicial > 0 else 0
-
-                st.metric(
-                    label="Densidade",
-                    value=f"{densidade_atual:.4f}",
-                    delta=f"{variacao_densidade:+.1f}%"
-                )
-
-        # =========================
-        # PROGRESSO DAS ETAPAS (expander abaixo do grafo)
-        # =========================
-        with st.expander("🔄 Pipeline de Transformação", expanded=False):
-            etapa_nomes = [h['nome'] for h in historico]
-            etapa_atual_idx = index_seguro
-            cols = st.columns(len(etapa_nomes))
-            for i, (col, nome) in enumerate(zip(cols, etapa_nomes)):
-                with col:
-                    if i < etapa_atual_idx:
-                        st.success(f"✅ {nome.split('.')[1].strip()}")
-                    elif i == etapa_atual_idx:
-                        st.info(f"🔵 {nome.split('.')[1].strip()}")
-                    else:
-                        st.text(f"⬜ {nome.split('.')[1].strip()}")
-
-            st.progress((index_seguro + 1) / len(historico))
-
-        # =========================
-        # TABELA COMPARATIVA DAS ETAPAS
+        # 6. EVOLUÇÃO DAS MÉTRICAS POR ETAPA
         # =========================
         with st.expander("📈 Evolução das Métricas por Etapa", expanded=False):
             dados_evolucao = []
