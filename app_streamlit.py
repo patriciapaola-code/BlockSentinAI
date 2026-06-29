@@ -595,7 +595,7 @@ def interface():
     # =========================
     tab_grafos, tab_dossie, tab_chat = st.tabs([
         "📊 Fluxo de Grafos",
-        "📄 Dossiê Investigativo",
+        "📄 Dashboard Investigativo",
         "🔎 Assistente IA Forense"
     ])
 
@@ -849,6 +849,20 @@ def interface():
             st.session_state.mostrar_nomes = st.checkbox("Exibir nomes das carteiras", value=st.session_state.mostrar_nomes, key="mostrar_nomes_cb")
         with col_opt2:
             st.session_state.mostrar_valores = st.checkbox("Exibir valores das transações", value=st.session_state.mostrar_valores, key="mostrar_valores_cb")
+
+        # =========================
+        # GRAFO INTERATIVO
+        # =========================
+        dg.renderizar_grafo_interativo(
+            G=etapa["grafo"],
+            carteira_principal=st.session_state.get("wallet_ativo", "desconhecida"),
+            scores=etapa["scores"],
+            trajetorias_destacadas=etapa.get("trajetorias"),
+            possiveis_mixers=etapa.get("possiveis_mixers"),
+            carteiras_alto_risco=etapa.get("carteiras_alto_risco"),
+            mostrar_nomes_carteiras=st.session_state.mostrar_nomes,
+            mostrar_valores_transacoes=st.session_state.mostrar_valores
+        )
 
         st.divider()
 
