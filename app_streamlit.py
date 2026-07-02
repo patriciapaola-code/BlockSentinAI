@@ -16,7 +16,7 @@ import dashboard_dossie as dd
 # ==============================================================================
 st.set_page_config(
     layout="wide", 
-    page_title="Sistema Antiransomware - Forense Blockchain", 
+    page_title="BlockSentinAI - Forense Blockchain", 
     page_icon="🕵️‍♂️",
     initial_sidebar_state="expanded"
 )
