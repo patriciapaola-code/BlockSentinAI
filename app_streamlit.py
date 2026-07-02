@@ -453,7 +453,7 @@ def interface():
                 st.caption("1. Legacy SegWit:")
                 st.code("16FnhJgft5PxM3QNRjq9FiafkKHAAv8Ngy", language="text")
             with col_leg2:
-                st.caption("2. P2PKH (Legacy):")
+                st.caption("2. Legacy P2PKH:")
                 st.code("1Mz7153HMuxXTuR2R1t78mGSdzaAtNbBWX", language="text")
         
         with tab_ransomware:
