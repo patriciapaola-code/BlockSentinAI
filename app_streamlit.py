@@ -366,7 +366,7 @@ def interface():
             )
 # FILTRO TEMPORAL 
          # Intervalo de datas
-        st.markdown("### 📅 Intervalo Temporal")
+        st.markdown("### Intervalo Temporal")
         col_data1, col_data2 = st.columns(2)
         with col_data1:
             data_inicio = st.date_input(
@@ -381,7 +381,7 @@ def interface():
         
         
         # Nível de sensibilidade
-        st.markdown("### ⚠️ Nível de Sensibilidade da Detecção de Risco")
+        st.markdown("### Nível de Sensibilidade da Detecção de Risco")
         sensibilidade = st.radio(
             "Selecione o nível de sensibilidade:",
             options=["Baixo", "Médio", "Alto"],
@@ -391,7 +391,7 @@ def interface():
         )
         
         # Comportamentos suspeitos
-        st.markdown("### 🚨 Tipos de Comportamento Suspeito a Detectar")
+        st.markdown("### Tipos de Comportamento Suspeito a Detectar")
         col_comp1, col_comp2 = st.columns(2)
         with col_comp1:
             detectar_fan_in = st.checkbox("Fan-in elevado", value=True, 
@@ -433,7 +433,7 @@ def interface():
         
         # Mostrar exemplo de carteira
         st.divider()
-        st.markdown("### 📚 Carteiras de Teste (Com Histórico Ativo)")
+        st.markdown("### Carteiras de Teste (Com Histórico Ativo)")
         
         # Abas com diferentes tipos de carteiras
         tab_segwit, tab_legacy, tab_ransomware = st.tabs(["SegWit (Recomendado)", "Legacy", "Histórico de Ransomware"])
@@ -477,16 +477,16 @@ def interface():
             col_ran1, col_ran2, col_ran3 = st.columns(3)
             with col_ran1:
                 st.caption("Carteira 1:")
-                st.code("1A1z7agoat4EvZ8eD6gL2pmCe4Sj7jzRH4", language="text")
-                st.caption("⚠️ Satoshi's wallet")
+                st.code("bc1qlf9n8vgqwtl573dcc300hcqkzw2dptl74p2vtn", language="text")
+                st.caption("Satoshi's wallet")
             with col_ran2:
                 st.caption("Carteira 2:")
-                st.code("1dice8EMCQAqQSN3LGzJ72b3FYYyHBiUSo", language="text")
-                st.caption("📊 Dice gambling (histórico)")
+                st.code("bc1qskjm9chwcgw02kfqzs9dn772zlvprdmgtrkj4m", language="text")
+                st.caption("Dice gambling (histórico)")
             with col_ran3:
                 st.caption("Carteira 3:")
-                st.code("1HQ3Go3qs6LaRoVKKEZkj5GN6aRBjADSLU", language="text")
-                st.caption("🔄 Mixer histórico")
+                st.code("bc1qjt79rs9rlsawdj0ewglvlz8y2j3ket4g94c3sz", language="text")
+                st.caption("Mixer histórico")
 
     # =========================
     # INIT GLOBAL STATE
