@@ -85,7 +85,7 @@ def render_dashboard_dossie(dossie: Dict[str, Any] | None = None, caminho: str =
 
     indicadores = _resumo_indicadores(dossie)
 
-    st.title("📄 Dashboard Investigativo")
+    st.title("📈 Dashboard Investigativo")
     st.caption("Resumo visual do dossiê gerado durante a análise da carteira")
 
     col1, col2, col3 = st.columns(3)
@@ -131,14 +131,14 @@ def render_dashboard_dossie(dossie: Dict[str, Any] | None = None, caminho: str =
     with tab_risco:
         carteiras = dossie.get("carteiras_alto_risco", [])
         if carteiras:
-            st.dataframe(pd.DataFrame(carteiras))
+            st.dataframe(pd.DataFrame(carteiras), use_container_width=True)
         else:
             st.write("Nenhuma carteira de alto risco identificada.")
 
     with tab_mixers:
         mixers = dossie.get("possiveis_mixers", [])
         if mixers:
-            st.dataframe(pd.DataFrame(mixers))
+            st.dataframe(pd.DataFrame(mixers), use_container_width=True)
         else:
             st.write("Nenhum possível mixer identificado.")
 

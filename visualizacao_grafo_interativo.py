@@ -17,6 +17,7 @@ def formatar_btc(valor_satoshis):
     btc = valor_satoshis / 100_000_000
     return f"{btc:.3f} BTC".rstrip("0").rstrip(".")
 
+
 def renderizar_grafo_interativo(
         G,
         carteira_principal=None,
@@ -131,7 +132,15 @@ def renderizar_grafo_interativo(
                     "strokeWidth": 4,
                     "strokeColor": "#00FF55"
                 },
-                borderWidth=borda_largura
+                borderWidth=borda_largura,
+                # Efeito de brilho (neon) usando a propriedade de sombra
+                shadow={
+                    "enabled": True,
+                    "color": cor_no,  # O brilho tem a mesma cor do nó
+                    "size": 50,       # Intensidade do brilho
+                    "x": 0,
+                    "y": 0
+                }
             )
         )
 
