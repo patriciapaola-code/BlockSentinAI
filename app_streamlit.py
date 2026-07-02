@@ -308,7 +308,6 @@ def interface():
             # Usa o valor do session_state como value para garantir consistência
             wallet_input = st.text_input(
                 "Endereço inicial da carteira:",
-                value=st.session_state.get("wallet_input", "bc1qjuqyesxjgravlf0evtz5p8ks8k2w6ytcherrk3"),
                 placeholder="Insira um endereço Bitcoin válido",
                 help="Ex: bc1q... (SegWit) ou 1... ou 3... (Legacy)",
                 key="wallet_input"
@@ -364,8 +363,7 @@ def interface():
                 min_value=0.0, value=1000.0, step=1.0,
                 help="Filtrar transações acima deste valor"
             )
-# FILTRO TEMPORAL 
-         # Intervalo de datas
+        # Filtro Temporal com Intervalo de datas
         st.markdown("### Intervalo Temporal")
         col_data1, col_data2 = st.columns(2)
         with col_data1:
@@ -455,8 +453,8 @@ def interface():
                 st.caption("1. Legacy SegWit:")
                 st.code("16FnhJgft5PxM3QNRjq9FiafkKHAAv8Ngy", language="text")
             with col_leg2:
-                st.caption("2. Multisig (P2SH):")
-                st.code("3J98t1WpEZ73CNmYviecrnyiWrnqRhWNLy", language="text")
+                st.caption("2. P2PKH (Legacy):")
+                st.code("1Mz7153HMuxXTuR2R1t78mGSdzaAtNbBWX", language="text")
         
         with tab_ransomware:
             st.warning("**⚠️ Carteiras de Histórico Público** - Para análise forense")
